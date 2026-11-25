@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#060607">
+  <title>Dado Solto — dados de RPG em 3D</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,3 92,27 92,73 50,97 8,73 8,27' fill='%23111'/%3E%3Cpolygon points='50,3 92,27 92,73 50,97 8,73 8,27' fill='none' stroke='%23ff2b3a' stroke-width='5'/%3E%3Ctext x='50' y='64' font-size='36' text-anchor='middle' font-family='system-ui' font-weight='700' fill='%23ff2b3a'%3E20%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="stage" class="stage" aria-label="Mesa de dados 3D. Toque para rolar."></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="topbar" id="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,4 91,28 91,72 50,96 9,72 9,28"/><path d="M50,4 L50,22 M9,28 L24,64 M91,28 L76,64 M50,96 L24,64 M50,96 L76,64 M50,22 L76,64 L24,64 Z"/></svg>
+      <span>Dado Solto</span>
+    </div>
+    <nav class="tools" aria-label="Opções">
+      <div class="luck" role="radiogroup" aria-label="Sorte no d20" id="mode">
+        <button type="button" role="radio" aria-checked="false" data-mode="dis" title="Desvantagem: rola 2d20 e fica com o menor">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span>Desv.</span>
+        </button>
+        <button type="button" role="radio" aria-checked="false" data-mode="adv" title="Vantagem: rola 2d20 e fica com o maior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg><span>Vant.</span>
+        </button>
+      </div>
+      <button type="button" class="icon-btn" id="history-open" aria-label="Histórico" title="Histórico (H)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="clear" aria-label="Limpar mesa" title="Limpar mesa (Esc)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <section class="result" id="result" aria-live="polite">
+    <p class="result-total" id="total"></p>
+    <p class="result-detail" id="detail"></p>
+    <p class="result-verdict" id="verdict"></p>
+  </section>
+
+  <p class="hint" id="hint">Escolha seus dados lá embaixo</p>
+
+  <footer class="dock" id="dock">
+    <div class="dock-row dock-controls">
+      <div class="stepper" role="group" aria-label="Modificador">
+        <button type="button" id="mod-minus" aria-label="Diminuir modificador">−</button>
+        <output id="mod-value" aria-live="polite">+0</output>
+        <button type="button" id="mod-plus" aria-label="Aumentar modificador">+</button>
+      </div>
+      <output class="formula" id="formula">Mesa vazia</output>
+      <button type="button" class="roll" id="roll" disabled>Rolar</button>
+    </div>
+    <div class="dock-row dice-row" id="dice-row" role="group" aria-label="Adicionar dados. Botão direito ou toque longo remove."></div>
+  </footer>
+
+  <aside class="drawer" id="drawer" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer-head">
+      <h2 id="drawer-title">Histórico</h2>
+      <div class="drawer-actions">
+        <button type="button" class="text-btn" id="history-clear">Apagar</button>
+        <button type="button" class="icon-btn" id="history-close" aria-label="Fechar histórico">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <ol class="history-list" id="history-list"></ol>
+    <p class="history-empty" id="history-empty">Nenhuma rolagem ainda.</p>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <noscript><p class="fallback">Ative o JavaScript para rolar os dados.</p></noscript>
+  <script src="app.js"></script>
+</body>
+</html>
