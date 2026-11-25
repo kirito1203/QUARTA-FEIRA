@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "site/index.html"
+        ],
+        "createdAt": "2026-11-25T15:42:03.996Z",
+        "reason": "Glow is the requested look: user asked for a dark black-and-red style and sent a reference image with glowing numbers on the dice"
+      }
+    ]
+  }
+}

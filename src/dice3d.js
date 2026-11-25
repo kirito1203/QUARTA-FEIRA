@@ -181,7 +181,7 @@ function labelText(kind, v) {
 // Texturas
 // ---------------------------------------------------------------------------
 
-const FONT = '700 {px}px "Inter", "SF Pro Display", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+const FONT = '700 {px}px "SF Pro Display", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
 
 function makeCanvas() {
   const c = document.createElement("canvas");
