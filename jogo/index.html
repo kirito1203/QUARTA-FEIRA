@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#160f26">
+<meta name="theme-color" content="#0b0918">
 <title>Lá em Cima</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
     height: 100%;
-    background: #160f26;
+    background: #0b0918;
     overflow: hidden;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
@@ -41,21 +41,21 @@
     width: 68px;
     height: 68px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.28);
-    background: rgba(22, 15, 38, 0.55);
-    color: #fff;
+    border: 2px solid rgba(214, 200, 255, 0.3);
+    background: rgba(14, 11, 30, 0.55);
+    color: #efe8ff;
     font: 700 13px/1 ui-monospace, Menlo, Consolas, monospace;
     touch-action: none;
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
   }
-  .pad button svg { width: 26px; height: 26px; fill: #fff; display: block; margin: auto; }
-  .pad button.on { background: rgba(255, 209, 102, 0.35); border-color: #ffd166; }
+  .pad button svg { width: 26px; height: 26px; fill: #efe8ff; display: block; margin: auto; }
+  .pad button.on { background: rgba(183, 156, 255, 0.35); border-color: #c9b6ff; }
   .pad .jump { width: 84px; height: 84px; }
 </style>
 </head>
 <body>
-<canvas id="game" width="320" height="180" aria-label="Jogo de plataforma Lá em Cima. Setas ou A e D para andar, espaço para pular."></canvas>
+<canvas id="game" width="480" height="270" aria-label="Jogo de plataforma Lá em Cima. Setas ou A e D para andar, espaço para pular."></canvas>
 
 <div class="pad left" aria-hidden="true">
   <button data-key="left"><svg viewBox="0 0 24 24"><path d="M15 4 7 12l8 8z"/></svg></button>
@@ -67,55 +67,98 @@
 
 <script>
 {
+  // Folha de sprites do personagem (gerada por tools/extract_sprites.py).
+  /*SPRITE-START*/
+  const SPRITE = {"cell": [32, 37], "anchor": [14, 33], "anims": {"idle": {"row": 0, "frames": 4}, "run": {"row": 1, "frames": 7}, "jump": {"row": 2, "frames": 6}, "fall": {"row": 3, "frames": 4}, "land": {"row": 4, "frames": 5}}};
+  SPRITE.src = 'data:image/png;base64,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';
+  /*SPRITE-END*/
+
   // =====================================================================
   // Configuração
   // =====================================================================
-  const W = 320, H = 180;
+  const W = 480, H = 270;
   const DT = 1 / 60;
   const PHYS = {
-    grav: 0.32, maxFall: 5.2,
-    jump: 5.4, jumpCut: 0.45,
-    accel: 0.28, airAccel: 0.2, friction: 0.32, maxRun: 1.6,
+    grav: 0.48, maxFall: 7.8,
+    jump: 8.1, jumpCut: 0.725,
+    accel: 0.42, airAccel: 0.3, friction: 0.48, maxRun: 2.4,
     coyote: 6, buffer: 7,
   };
+  const PW = 12, PH = 26; // caixa de colisão do personagem
 
+  // Paleta noturna, puxada das cores do personagem.
   const C = {
-    ink: '#1a1226',
-    skyTop: '#1d1535', skyMid: '#4a2858', skyLow: '#c75b5b', horizon: '#f4a261',
-    sun: '#ffd27a', sunCore: '#fff1c9',
-    mtnFar: '#6e3b66', mtnMid: '#4b2850', mtnNear: '#2e1a3d',
-    grass: '#7ee081', grassDark: '#3f9e58',
-    stone: '#4a3a5e', stoneLight: '#6a5585', stoneDark: '#2d2240',
-    hood: '#2ec4b6', hoodDark: '#1d8a84', scarf: '#ffd166', scarfDark: '#e0a63a',
-    skin: '#ffd9b3', legs: '#3d2c5c', boot: '#7a4b33',
-    wood: '#9b6a43', woodDark: '#6e4529', glow: '#ffd27a', glowHot: '#fff4d6',
-    text: '#fff7e8', textDim: '#d8c6e8',
+    ink: '#0c0a16',
+    skyTop: '#07060f', skyMid: '#141130', skyLow: '#2a2452', horizon: '#3d3470',
+    moon: '#efe8ff', moonShade: '#c9bfe8', moonGlow: 'rgba(201,182,255,',
+    far: '#1d1838', mid: '#151129', near: '#0e0b1d',
+    frost: '#d8cff5', frostDark: '#8d84c4',
+    stone: '#2c2646', stoneLight: '#433b68', stoneDark: '#1b1730',
+    lilac: '#b79cff', lilacHot: '#efe8ff', lilacDim: '#6b5aa8',
+    wood: '#3b2f58', woodDark: '#261d3c', metal: '#5a5380', metalDark: '#3a3458',
+    text: '#f3eeff', textDim: '#a99fce', accent: '#c9b6ff',
   };
 
-  // Fases: o chão é sólido; as plataformas dá para atravessar por baixo.
+  // ---------------------------------------------------------------------
+  // Fases. Chão (solids) é sólido; plataformas dá para atravessar por baixo.
+  // Plataformas podem: andar (move), cair (crumble) ou só aparecer/andar com
+  // a alavanca ligada (power: 'move' | 'appear').
+  // ---------------------------------------------------------------------
   const LEVELS = [
     {
       name: 'FASE 1', tip: 'TRÊS DEGRAUS ATÉ A PORTA',
-      start: { x: 18, y: 148 },
-      solids: [{ x: 0, y: 160, w: 320, h: 20 }],
+      start: { x: 24, y: 240 },
+      solids: [{ x: 0, y: 240, w: 480, h: 30 }],
       platforms: [
-        { x: 44, y: 126, w: 56 },
-        { x: 124, y: 92, w: 56 },
-        { x: 204, y: 58, w: 96 },
+        { x: 66, y: 192, w: 84 },
+        { x: 186, y: 144, w: 84 },
+        { x: 306, y: 96, w: 150 },
       ],
-      door: { x: 272, y: 58 },
+      door: { x: 412, y: 96 },
     },
     {
       name: 'FASE 2', tip: 'CUIDADO COM O BURACO',
-      start: { x: 14, y: 148 },
-      solids: [{ x: 0, y: 160, w: 110, h: 20 }, { x: 210, y: 160, w: 110, h: 20 }],
+      start: { x: 20, y: 240 },
+      solids: [{ x: 0, y: 240, w: 165, h: 30 }, { x: 315, y: 240, w: 165, h: 30 }],
       platforms: [
-        { x: 112, y: 146, w: 36, move: { from: 112, to: 172, speed: 0.55 } },
-        { x: 230, y: 126, w: 50 },
-        { x: 150, y: 92, w: 50 },
-        { x: 70, y: 58, w: 52 },
+        { x: 168, y: 222, w: 54, move: { axis: 'x', from: 168, to: 258, speed: 0.85, pause: 20 } },
+        { x: 345, y: 192, w: 76 },
+        { x: 230, y: 144, w: 76 },
+        { x: 112, y: 96, w: 80 },
       ],
-      door: { x: 84, y: 58 },
+      door: { x: 136, y: 96 },
+    },
+    {
+      name: 'FASE 3', tip: 'A ALAVANCA LIGA O ELEVADOR',
+      start: { x: 20, y: 240 },
+      solids: [{ x: 0, y: 240, w: 480, h: 30 }],
+      platforms: [
+        { x: 60, y: 192, w: 90 },
+        { x: 186, y: 144, w: 104 },
+        { x: 318, y: 228, w: 52, elevator: true, power: 'move', move: { axis: 'y', from: 66, to: 228, speed: 1.3, pause: 50 } },
+        { x: 380, y: 66, w: 100 },
+      ],
+      lever: { x: 268, y: 144 },
+      wire: [[272, 146], [272, 160], [300, 160], [300, 236], [344, 236]],
+      door: { x: 430, y: 66 },
+    },
+    {
+      name: 'FASE 4', tip: 'O CHÃO NÃO AGUENTA MUITO',
+      start: { x: 20, y: 240 },
+      solids: [{ x: 0, y: 240, w: 96, h: 30 }],
+      platforms: [
+        { x: 126, y: 222, w: 48, crumble: true },
+        { x: 204, y: 192, w: 48, crumble: true },
+        { x: 282, y: 162, w: 48, crumble: true },
+        { x: 358, y: 140, w: 112 },
+        { x: 290, y: 110, w: 46, power: 'appear' },
+        { x: 196, y: 88, w: 48, power: 'appear' },
+        { x: 122, y: 72, w: 48, power: 'appear' },
+        { x: 0, y: 60, w: 100 },
+      ],
+      lever: { x: 448, y: 140 },
+      wire: [[452, 142], [452, 150], [474, 150], [474, 126], [313, 126], [313, 112]],
+      door: { x: 34, y: 60 },
     },
   ];
 
@@ -135,6 +178,9 @@
   }
   window.addEventListener('resize', fit);
   fit();
+
+  const sheet = new Image();
+  sheet.src = SPRITE.src;
 
   // =====================================================================
   // Fonte de pixel 3x5 (desenhada à mão)
@@ -160,10 +206,7 @@
     'Í': ['I', [[2, -2], [1, -1]]], 'Ó': ['O', [[2, -2], [1, -1]]], 'Ô': ['O', [[0, -1], [1, -2], [2, -1]]],
     'Õ': ['O', [[0, -1], [1, -2], [2, -2]]], 'Ú': ['U', [[2, -2], [1, -1]]], 'Ç': ['C', [[1, 5], [0, 6]]],
   };
-
-  function textWidth(str, s = 1) {
-    return str.length * 4 * s - s;
-  }
+  const textWidth = (str, s = 1) => str.length * 4 * s - s;
   function drawText(str, x, y, { s = 1, color = C.text, align = 'left', shadow = C.ink } = {}) {
     str = str.toUpperCase();
     if (align === 'center') x -= Math.floor(textWidth(str, s) / 2);
@@ -188,7 +231,7 @@
   }
 
   // =====================================================================
-  // Som (sintetizado, sem arquivos)
+  // Som (sintetizado)
   // =====================================================================
   let audio = null;
   let muted = false;
@@ -210,16 +253,19 @@
         o.start(t + delay);
         o.stop(t + delay + dur + 0.02);
       };
-      if (kind === 'jump') tone('square', 260, 620, 0.12, 0.06);
-      if (kind === 'land') tone('triangle', 140, 70, 0.07, 0.08);
-      if (kind === 'door') [392, 494, 587, 784].forEach((f, i) => tone('triangle', f, f, 0.16, 0.07, i * 0.07));
-      if (kind === 'fall') tone('sawtooth', 420, 60, 0.45, 0.05);
-      if (kind === 'start') [523, 659].forEach((f, i) => tone('square', f, f, 0.08, 0.04, i * 0.08));
+      if (kind === 'jump') tone('square', 240, 560, 0.12, 0.05);
+      if (kind === 'land') tone('triangle', 130, 65, 0.07, 0.08);
+      if (kind === 'door') [330, 415, 494, 659].forEach((f, i) => tone('triangle', f, f, 0.18, 0.07, i * 0.08));
+      if (kind === 'fall') tone('sawtooth', 380, 55, 0.45, 0.05);
+      if (kind === 'start') [440, 554].forEach((f, i) => tone('square', f, f, 0.08, 0.04, i * 0.08));
+      if (kind === 'lever') { tone('square', 180, 120, 0.06, 0.06); [523, 784].forEach((f, i) => tone('triangle', f, f, 0.14, 0.06, 0.08 + i * 0.09)); }
+      if (kind === 'crack') tone('sawtooth', 220, 90, 0.18, 0.04);
+      if (kind === 'appear') tone('sine', 660, 990, 0.18, 0.05);
     } catch {}
   }
 
   // =====================================================================
-  // Cenário pré-desenhado (céu, sol, montanhas)
+  // Cenário noturno pré-desenhado
   // =====================================================================
   const bg = document.createElement('canvas');
   bg.width = W; bg.height = H;
@@ -227,248 +273,323 @@
     const b = bg.getContext('2d');
     const g = b.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, C.skyTop);
-    g.addColorStop(0.45, C.skyMid);
-    g.addColorStop(0.78, C.skyLow);
+    g.addColorStop(0.5, C.skyMid);
+    g.addColorStop(0.82, C.skyLow);
     g.addColorStop(1, C.horizon);
     b.fillStyle = g;
     b.fillRect(0, 0, W, H);
-    // faixas de pôr do sol (dithering simples)
-    for (let y = 100; y < H; y += 6) {
-      b.fillStyle = 'rgba(255,210,122,0.06)';
-      b.fillRect(0, y, W, 2);
+    // lua com halo e crateras
+    const mx = 372, my = 62;
+    for (let r = 64; r > 30; r -= 6) {
+      b.fillStyle = C.moonGlow + (0.035 * (64 - r) / 6 + 0.02) + ')';
+      b.beginPath(); b.arc(mx, my, r, 0, Math.PI * 2); b.fill();
     }
-    // sol
-    const sx = 112, sy = 100;
-    for (let r = 34; r > 0; r--) {
-      b.fillStyle = r > 26 ? 'rgba(255,210,122,0.05)' : r > 22 ? C.sun : C.sunCore;
-      if (r <= 22) {
-        b.beginPath();
-        b.arc(sx, sy, 22, 0, Math.PI * 2);
-        b.fill();
-        break;
-      }
-      b.beginPath();
-      b.arc(sx, sy, r, 0, Math.PI * 2);
-      b.fill();
+    b.fillStyle = C.moon;
+    b.beginPath(); b.arc(mx, my, 28, 0, Math.PI * 2); b.fill();
+    b.fillStyle = C.moonShade;
+    for (const [cx, cy, r] of [[-9, -6, 6], [8, 7, 4], [10, -10, 3], [-4, 12, 3], [-14, 6, 2]]) {
+      b.beginPath(); b.arc(mx + cx, my + cy, r, 0, Math.PI * 2); b.fill();
     }
-    b.fillStyle = C.sun;
-    for (let y = sy + 4; y < sy + 22; y += 5) b.fillRect(sx - 24, y, 48, 2);
-    // montanhas (silhuetas em degraus de pixel)
+    b.fillStyle = 'rgba(42,36,82,0.35)';
+    b.beginPath(); b.arc(mx + 10, my - 3, 26, -0.9, 1.7); b.fill();
+
+    // silhuetas: morros, torre em ruínas e pinheiros
     const ridge = (base, amp, step, seed, color) => {
       b.fillStyle = color;
       let h = base;
       for (let x = 0; x < W; x += step) {
-        h += Math.sin(x * 0.045 + seed) * amp + Math.sin(x * 0.11 + seed * 2) * amp * 0.5;
-        h = Math.max(base - 40, Math.min(base + 10, h));
+        h += Math.sin(x * 0.03 + seed) * amp + Math.sin(x * 0.08 + seed * 2) * amp * 0.5;
+        h = Math.max(base - 50, Math.min(base + 14, h));
         b.fillRect(x, Math.round(h), step, H);
       }
     };
-    ridge(112, 2.6, 4, 1.3, C.mtnFar);
-    ridge(132, 2.2, 3, 4.1, C.mtnMid);
-    ridge(150, 1.6, 2, 7.7, C.mtnNear);
+    ridge(170, 3, 4, 1.3, C.far);
+    b.fillStyle = C.far;
+    b.fillRect(70, 118, 22, 60);
+    b.fillRect(66, 112, 30, 8);
+    for (let i = 0; i < 4; i++) b.fillRect(66 + i * 8, 106, 5, 6);
+    b.fillStyle = 'rgba(201,182,255,0.55)';
+    b.fillRect(79, 128, 3, 5);
+    ridge(196, 2.4, 3, 4.1, C.mid);
+    const pine = (x, base, h, color) => {
+      b.fillStyle = color;
+      for (let y = 0; y < h; y++) {
+        const half = Math.floor((y / h) * (h * 0.32)) + 1;
+        b.fillRect(x - half, base - h + y, half * 2, 1);
+      }
+      b.fillRect(x - 1, base, 2, 4);
+    };
+    for (let i = 0; i < 16; i++) pine(12 + i * 31 + ((i * 17) % 11), 214 + ((i * 7) % 9), 22 + ((i * 13) % 14), C.mid);
+    ridge(226, 1.6, 2, 7.7, C.near);
+    for (let i = 0; i < 11; i++) pine(30 + i * 45 + ((i * 23) % 15), 236 + ((i * 5) % 6), 30 + ((i * 11) % 12), C.near);
+    for (let y = 200; y < H; y += 5) {
+      b.fillStyle = `rgba(150,130,220,${0.02 + (y - 200) * 0.0006})`;
+      b.fillRect(0, y, W, 3);
+    }
   }
 
-  const stars = Array.from({ length: 34 }, (_, i) => ({
-    x: (i * 97 + 13) % W, y: (i * 53 + 7) % 90, p: (i * 0.7) % 6,
+  const stars = Array.from({ length: 80 }, (_, i) => ({
+    x: (i * 149 + 31) % W, y: (i * 61 + 11) % 150, p: (i * 0.77) % 6, big: i % 13 === 0,
   }));
   const clouds = [
-    { x: 30, y: 26, w: 3, v: 0.05 }, { x: 190, y: 44, w: 4, v: 0.035 }, { x: 260, y: 18, w: 2, v: 0.06 },
+    { x: 40, y: 40, w: 4, v: 0.04 }, { x: 250, y: 92, w: 5, v: 0.03 }, { x: 420, y: 28, w: 3, v: 0.05 },
   ];
-
   function drawCloud(x, y, w) {
     x = Math.round(x); y = Math.round(y);
-    ctx.fillStyle = 'rgba(255,214,190,0.18)';
-    ctx.fillRect(x, y + 2, w * 10, 4);
-    ctx.fillRect(x + 4, y, w * 10 - 10, 3);
-    ctx.fillRect(x + 8, y - 2, w * 5, 3);
+    ctx.fillStyle = 'rgba(180,165,235,0.07)';
+    ctx.fillRect(x, y + 3, w * 14, 5);
+    ctx.fillRect(x + 6, y, w * 14 - 14, 4);
+    ctx.fillRect(x + 12, y - 3, w * 7, 4);
   }
 
   // =====================================================================
-  // Desenho de peças
+  // Peças do cenário
   // =====================================================================
   function drawSolid(s) {
     ctx.fillStyle = C.stoneDark;
     ctx.fillRect(s.x, s.y, s.w, s.h);
     ctx.fillStyle = C.stone;
-    for (let y = s.y + 4; y < s.y + s.h; y += 6) {
-      const off = ((y - s.y) / 6) % 2 ? 0 : 6;
-      for (let x = s.x - off; x < s.x + s.w; x += 12) {
-        const x0 = Math.max(s.x, x + 1), x1 = Math.min(s.x + s.w, x + 11);
-        if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 5);
+    for (let y = s.y + 5; y < s.y + s.h; y += 8) {
+      const off = ((y - s.y) / 8) % 2 ? 0 : 8;
+      for (let x = s.x - off; x < s.x + s.w; x += 16) {
+        const x0 = Math.max(s.x, x + 1), x1 = Math.min(s.x + s.w, x + 15);
+        if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 7);
       }
     }
-    ctx.fillStyle = C.grassDark;
+    ctx.fillStyle = C.frostDark;
     ctx.fillRect(s.x, s.y, s.w, 4);
-    ctx.fillStyle = C.grass;
+    ctx.fillStyle = C.frost;
     ctx.fillRect(s.x, s.y, s.w, 2);
-    // tufos
-    ctx.fillStyle = C.grass;
-    for (let x = s.x + 3; x < s.x + s.w - 2; x += 9) ctx.fillRect(x, s.y - 1, 1, 1);
+    for (let x = s.x + 5; x < s.x + s.w - 3; x += 13) {
+      ctx.fillStyle = C.frostDark;
+      ctx.fillRect(x, s.y + 4, 1, 2 + (x % 3));
+    }
   }
 
-  function drawPlatform(p) {
-    const x = Math.round(p.x), y = p.y;
+  function drawPlatform(p, t) {
+    if (p.power === 'appear') return drawGhost(p, t);
+    let x = Math.round(p.x), y = Math.round(p.y);
+    if (p.crumble) {
+      if (p.gone) return;
+      if (p.t > 8 && !p.drop) x += (t % 4 < 2 ? 1 : -1);
+      y += Math.round(p.drop || 0);
+      ctx.globalAlpha = p.drop ? Math.max(0, 1 - p.drop / 40) : 1;
+    }
+    const h = 10;
     ctx.fillStyle = C.ink;
-    ctx.fillRect(x - 1, y - 1, p.w + 2, 9);
-    ctx.fillStyle = C.stoneDark;
-    ctx.fillRect(x, y, p.w, 8);
-    ctx.fillStyle = C.stone;
-    for (let bx = x + 1; bx < x + p.w - 1; bx += 8) ctx.fillRect(bx, y + 4, Math.min(7, x + p.w - 1 - bx), 3);
+    ctx.fillRect(x - 1, y - 1, p.w + 2, h + 2);
+    ctx.fillStyle = p.elevator ? C.metalDark : C.stoneDark;
+    ctx.fillRect(x, y, p.w, h);
+    ctx.fillStyle = p.elevator ? C.metal : C.stone;
+    for (let bx = x + 1; bx < x + p.w - 1; bx += 10) ctx.fillRect(bx, y + 5, Math.min(9, x + p.w - 1 - bx), 4);
     ctx.fillStyle = C.stoneLight;
-    ctx.fillRect(x, y + 3, p.w, 1);
-    ctx.fillStyle = C.grassDark;
+    ctx.fillRect(x, y + 4, p.w, 1);
+    ctx.fillStyle = p.elevator ? C.metal : C.frostDark;
     ctx.fillRect(x, y, p.w, 3);
-    ctx.fillStyle = C.grass;
+    ctx.fillStyle = p.elevator ? '#8f87c2' : C.frost;
     ctx.fillRect(x, y, p.w, 1);
-    // pingos de grama na borda
-    ctx.fillStyle = C.grassDark;
-    ctx.fillRect(x + 2, y + 3, 1, 2);
-    ctx.fillRect(x + p.w - 4, y + 3, 1, 1);
-    if (p.move) {
-      // engrenagem embaixo indica plataforma que anda
-      ctx.fillStyle = C.scarf;
-      ctx.fillRect(x + p.w / 2 - 2, y + 8, 4, 2);
+    if (p.crumble) {
       ctx.fillStyle = C.ink;
-      ctx.fillRect(x + p.w / 2 - 1, y + 8, 2, 1);
+      const k = Math.min(3, Math.floor((p.t || 0) / 8));
+      for (let i = 0; i <= k; i++) ctx.fillRect(x + 8 + i * 11, y + 3, 1, 4 + (i % 2) * 2);
+      ctx.globalAlpha = 1;
+    }
+    if (p.move && p.move.axis === 'x') {
+      ctx.fillStyle = C.lilac;
+      ctx.fillRect(x + p.w / 2 - 3, y + h, 6, 2);
+    }
+    if (p.elevator) {
+      ctx.fillStyle = game.power ? (Math.floor(t / 10) % 2 ? C.lilacHot : C.lilac) : C.lilacDim;
+      ctx.fillRect(x + 4, y + 6, 2, 2);
+      ctx.fillRect(x + p.w - 6, y + 6, 2, 2);
     }
   }
 
-  // Porta: x = canto esquerdo, y = chão onde ela está. open: 0..1
-  function drawDoor(d, open, t) {
-    const x = d.x, y = d.y;
-    const w = 16, h = 24;
-    // luz no chão
-    if (open > 0) {
-      ctx.fillStyle = `rgba(255,210,122,${0.25 * open})`;
-      ctx.fillRect(x - 6, y - 2, w + 12, 2);
+  function drawGhost(p, t) {
+    const a = p.appear || 0;
+    const x = Math.round(p.x), y = Math.round(p.y);
+    if (a <= 0) {
+      ctx.fillStyle = 'rgba(183,156,255,0.22)';
+      for (let i = 0; i < p.w; i += 6) ctx.fillRect(x + i, y, 3, 1);
+      return;
     }
-    // batente de pedra com arco
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(x - 2, y - h - 1, w + 4, h + 1);
-    ctx.fillRect(x, y - h - 3, w, 2);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(183,156,255,0.25)';
+    ctx.fillRect(x - 3, y - 3, p.w + 6, 12);
+    ctx.fillStyle = C.lilacDim;
+    ctx.fillRect(x, y, p.w, 6);
+    ctx.fillStyle = C.lilac;
+    ctx.fillRect(x, y, p.w, 2);
+    ctx.fillStyle = C.lilacHot;
+    const sh = (t * 0.6) % (p.w + 20) - 10;
+    ctx.fillRect(x + Math.max(0, sh), y, Math.max(0, Math.min(6, p.w - sh)), 1);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawRails(p) {
+    if (!p.elevator) return;
+    const top = p.move.from - 4, bottom = 240;
+    ctx.fillStyle = C.metalDark;
+    ctx.fillRect(p.x - 3, top, 2, bottom - top);
+    ctx.fillRect(p.x + p.w + 1, top, 2, bottom - top);
     ctx.fillStyle = C.stoneLight;
-    ctx.fillRect(x - 1, y - h, w + 2, h);
-    ctx.fillRect(x + 1, y - h - 2, w - 2, 2);
-    // vão
+    for (let y = top + 4; y < bottom; y += 12) {
+      ctx.fillRect(p.x - 3, y, 2, 1);
+      ctx.fillRect(p.x + p.w + 1, y, 2, 1);
+    }
+  }
+
+  function drawWire(L, t) {
+    if (!L.wire) return;
+    const pts = L.wire;
+    const on = game.power;
+    let d = 0;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const n = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+      for (let i = k > 0 ? 1 : 0; i <= n; i++) {
+        d++;
+        const x = Math.round(a[0] + ((b[0] - a[0]) * i) / n), y = Math.round(a[1] + ((b[1] - a[1]) * i) / n);
+        const ph = (d - Math.floor(t * 1.5)) % 18;
+        ctx.fillStyle = !on ? C.stone : ph === 0 ? C.lilacHot : ph === 1 ? C.lilac : C.lilacDim;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
+  function drawLever(lv, t) {
+    const x = lv.x, y = lv.y;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(x - 1, y - 6, 12, 6);
+    ctx.fillStyle = C.metalDark;
+    ctx.fillRect(x, y - 5, 10, 5);
+    ctx.fillStyle = C.metal;
+    ctx.fillRect(x, y - 5, 10, 1);
+    const ang = -0.7 + 1.4 * (lv.anim || 0);
+    const len = 12;
+    ctx.fillStyle = '#8f87c2';
+    for (let i = 0; i < len; i++) ctx.fillRect(Math.round(x + 5 + Math.sin(ang) * i), Math.round(y - 5 - Math.cos(ang) * i), 2, 1);
+    const tx = Math.round(x + 5 + Math.sin(ang) * len), ty = Math.round(y - 5 - Math.cos(ang) * len);
+    if (lv.on) {
+      ctx.fillStyle = 'rgba(183,156,255,0.3)';
+      ctx.fillRect(tx - 3, ty - 3, 8, 8);
+    }
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(tx - 2, ty - 2, 6, 6);
+    ctx.fillStyle = lv.on ? (Math.floor(t / 12) % 2 ? C.lilacHot : C.lilac) : C.lilacDim;
+    ctx.fillRect(tx - 1, ty - 1, 4, 4);
+  }
+
+  // Porta: x = canto esquerdo, y = chão. open: 0..1
+  function drawDoor(d, open, t) {
+    const x = d.x, y = d.y, w = 24, h = 36;
+    if (open > 0) {
+      ctx.fillStyle = `rgba(201,182,255,${0.22 * open})`;
+      ctx.fillRect(x - 10, y - 3, w + 20, 3);
+      ctx.fillStyle = `rgba(201,182,255,${0.08 * open})`;
+      ctx.fillRect(x - 6, y - h - 6, w + 12, h + 6);
+    }
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(x - 3, y - h - 1, w + 6, h + 1);
+    ctx.fillRect(x - 1, y - h - 4, w + 2, 3);
+    ctx.fillStyle = C.stoneLight;
+    ctx.fillRect(x - 2, y - h, w + 4, h);
+    ctx.fillRect(x, y - h - 3, w, 3);
+    ctx.fillStyle = C.frostDark;
+    ctx.fillRect(x - 2, y - h, w + 4, 1);
     const ix = x + 1, iy = y - h + 1, iw = w - 2, ih = h - 1;
     ctx.fillStyle = C.ink;
     ctx.fillRect(ix, iy, iw, ih);
     if (open > 0) {
-      // interior iluminado pulsando
-      const pulse = 0.85 + Math.sin(t * 0.12) * 0.15;
-      ctx.fillStyle = C.glow;
+      ctx.fillStyle = C.lilac;
       ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 1);
-      ctx.fillStyle = C.glowHot;
-      ctx.globalAlpha = pulse;
-      ctx.fillRect(ix + 3, iy + 3, iw - 6, ih - 3);
+      ctx.globalAlpha = 0.8 + Math.sin(t * 0.1) * 0.2;
+      ctx.fillStyle = C.lilacHot;
+      ctx.fillRect(ix + 4, iy + 4, iw - 8, ih - 4);
       ctx.globalAlpha = 1;
     }
-    // folha da porta girando (fica mais estreita ao abrir)
-    const pw = Math.max(0, Math.round((iw) * (1 - open)));
+    const pw = Math.max(0, Math.round(iw * (1 - open)));
     if (pw > 0) {
       ctx.fillStyle = C.wood;
       ctx.fillRect(ix, iy, pw, ih);
       ctx.fillStyle = C.woodDark;
-      for (let px = ix + 3; px < ix + pw; px += 4) ctx.fillRect(px, iy, 1, ih);
-      ctx.fillRect(ix, iy + 5, pw, 1);
-      ctx.fillRect(ix, iy + ih - 6, pw, 1);
-      if (pw > 5) {
-        ctx.fillStyle = C.scarf;
-        ctx.fillRect(ix + pw - 3, iy + 12, 2, 2);
+      for (let px = ix + 4; px < ix + pw; px += 5) ctx.fillRect(px, iy, 1, ih);
+      ctx.fillRect(ix, iy + 7, pw, 1);
+      ctx.fillRect(ix, iy + ih - 8, pw, 1);
+      if (pw > 7) {
+        ctx.fillStyle = C.accent;
+        ctx.fillRect(ix + pw - 4, iy + 17, 2, 3);
       }
     }
-    // pedra-chave
-    ctx.fillStyle = C.scarf;
-    ctx.fillRect(x + w / 2 - 1, y - h - 3, 2, 2);
+    ctx.fillStyle = open > 0 ? C.lilacHot : C.lilac;
+    ctx.fillRect(x + w / 2 - 1, y - h - 4, 2, 2);
   }
 
-  // Personagem desenhado com retângulos de pixel. fx, fy = pés (centro).
+  // =====================================================================
+  // Personagem (sprites)
+  // =====================================================================
+  function playerFrame(p, t) {
+    if (!p.onGround) {
+      if (p.vy < 0) {
+        if (p.airT < 5) return ['jump', 1];
+        if (p.vy < -2.5) return ['jump', 2];
+        return ['jump', 3];
+      }
+      if (p.vy < 2) return ['jump', 4];
+      return ['fall', Math.floor(p.airT / 6) % 4];
+    }
+    if (p.landT > 0 && !(Math.abs(p.vx) > 0.5 && p.landT < 8)) return ['land', 2 + Math.min(2, Math.floor((12 - p.landT) / 4))];
+    if (Math.abs(p.vx) > 0.4) return ['run', Math.floor(p.runT / 4) % 7];
+    return ['idle', Math.floor(t / 11) % 4];
+  }
+
+  function drawSprite(anim, frame, fx, fy, face, scale = 1) {
+    if (!sheet.complete || !sheet.naturalWidth) {
+      ctx.fillStyle = C.frost;
+      ctx.fillRect(fx - 6 * scale, fy - 26 * scale, 12 * scale, 26 * scale);
+      return;
+    }
+    const [cw, ch] = SPRITE.cell;
+    const [ax, ay] = SPRITE.anchor;
+    const row = SPRITE.anims[anim].row;
+    ctx.save();
+    ctx.translate(Math.round(fx), Math.round(fy));
+    ctx.scale(face * scale, scale);
+    ctx.drawImage(sheet, frame * cw, row * ch, cw, ch, -ax, -ay, cw, ch);
+    ctx.restore();
+  }
+
   function drawPlayer(p, t) {
     if (p.hidden) return;
-    const f = p.face;
-    const fx = Math.round(p.x + p.w / 2), fy = Math.round(p.y + p.h);
-    const parts = [];
-    const R = (x, y, w, h, c) => parts.push([x, y, w, h, c]);
-
-    let legs;
-    if (!p.onGround) legs = p.vy < 0 ? [[-3, -1], [1, -2]] : [[-4, 0], [2, -1]];
-    else if (Math.abs(p.vx) > 0.25) {
-      const fr = Math.floor(p.runT / 5) % 4;
-      legs = [[[-4, 0], [2, 0]], [[-2, -1], [0, 0]], [[2, 0], [-4, 0]], [[0, 0], [-2, -1]]][fr];
-    } else legs = [[-3, 0], [1, 0]];
-
-    const bob = p.onGround && Math.abs(p.vx) < 0.25 && Math.floor(t / 28) % 2 ? 1 : 0;
-    const squash = p.squash > 0 ? 1 : 0;
-    const oy = bob + squash;
-
-    for (const [lx, lift] of legs) {
-      R(lx, -3 + lift, 2, 2, C.legs);
-      R(lx, -1 + lift, 2, 1, C.boot);
-    }
-    // corpo
-    R(-3, -8 + oy, 6, 5, C.hood);
-    R(-3, -8 + oy, 2, 5, C.hoodDark);
-    // cachecol + ponta esvoaçante
-    R(-3, -8 + oy, 7, 1, C.scarf);
-    const wave = Math.floor(t / 6) % 2;
-    const moving = Math.abs(p.vx) > 0.3 || !p.onGround;
-    R(-5, -8 + oy, 2, 1, C.scarf);
-    R(-6, -7 + oy + (moving ? wave : 1), 2, 1, C.scarfDark);
-    // cabeça (capuz)
-    R(-3, -13 + oy, 7, 5, C.hood);
-    R(-4, -12 + oy, 1, 3, C.hoodDark);
-    R(-2, -14 + oy, 4, 1, C.hood);
-    // rosto
-    R(0, -12 + oy, 4, 3, C.skin);
-    const blink = Math.floor(t / 4) % 50 === 0;
-    R(2, -11 + oy, 1, blink ? 0 : 1, C.ink);
-
-    // contorno (cada peça expandida em 1px) e depois o preenchimento
-    const X = (x, w) => (f > 0 ? fx + x : fx - x - w);
-    ctx.fillStyle = C.ink;
-    for (const [x, y, w, h] of parts) if (h > 0) ctx.fillRect(X(x, w) - 1, fy + y - 1, w + 2, h + 2);
-    for (const [x, y, w, h, c] of parts) {
-      if (h <= 0) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect(X(x, w), fy + y, w, h);
-    }
+    const [anim, frame] = playerFrame(p, t);
+    ctx.globalAlpha = p.fade == null ? 1 : p.fade;
+    drawSprite(anim, frame, p.x + PW / 2, p.y + PH, p.face);
+    ctx.globalAlpha = 1;
   }
 
   // =====================================================================
   // Partículas
   // =====================================================================
   let particles = [];
-  function puff(x, y, n, color = 'rgba(255,240,220,0.8)', spread = 1) {
+  function puff(x, y, n, color = 'rgba(216,207,245,0.8)', spread = 1.4) {
     for (let i = 0; i < n; i++) {
-      particles.push({
-        x, y,
-        vx: (Math.random() * 2 - 1) * spread,
-        vy: -Math.random() * 0.8,
-        life: 14 + Math.random() * 10,
-        color,
-      });
+      particles.push({ x, y, vx: (Math.random() * 2 - 1) * spread, vy: -Math.random(), life: 16 + Math.random() * 12, color, g: 0.04 });
     }
   }
 
   // =====================================================================
-  // Estado do jogo
+  // Estado
   // =====================================================================
   const keys = { left: false, right: false, jump: false };
-  let jumpPressed = false; // borda de subida (para buffer)
+  let jumpPressed = false;
 
   const game = {
     mode: 'title', // title | play | enter | iris-out | iris-in | end
-    level: 0,
-    t: 0,
-    deaths: 0,
-    frames: 0, // tempo de jogo
-    doorOpen: 0,
-    iris: 1,
-    banner: 0,
-    shake: 0,
+    level: 0, t: 0, deaths: 0, frames: 0,
+    doorOpen: 0, iris: 1, banner: 0, shake: 0, power: false,
   };
   let L = null;
-  const player = { x: 0, y: 0, w: 8, h: 12, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, runT: 0, squash: 0, hidden: false, enterT: 0 };
+  const player = { x: 0, y: 0, w: PW, h: PH, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, runT: 0, airT: 0, landT: 0, hidden: false, enterT: 0, fade: null };
 
   function loadLevel(i) {
     game.level = i;
@@ -476,45 +597,83 @@
     L = {
       ...src,
       solids: src.solids.map((s) => ({ ...s })),
-      platforms: src.platforms.map((p) => ({ ...p, dir: 1, prevX: p.x })),
+      platforms: src.platforms.map((p) => ({ ...p, dir: -1, wait: 0, prevX: p.x, prevY: p.y, t: 0, drop: 0, gone: false, respawn: 0, appear: 0, delay: null })),
+      lever: src.lever ? { ...src.lever, on: false, anim: 0 } : null,
     };
+    let k = 0;
+    for (const pl of L.platforms) if (pl.power === 'appear') pl.order = k++;
+    game.power = false;
     game.doorOpen = 0;
-    game.banner = 150;
+    game.banner = 160;
     particles = [];
     resetPlayer();
   }
 
   function resetPlayer() {
-    Object.assign(player, { x: L.start.x, y: L.start.y, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, squash: 0, hidden: false, enterT: 0 });
+    Object.assign(player, { x: L.start.x, y: L.start.y - PH, vx: 0, vy: 0, face: 1, onGround: true, standOn: null, coyote: 0, buffer: 0, airT: 0, landT: 0, hidden: false, enterT: 0, fade: null });
+    for (const pl of L.platforms) if (pl.crumble) Object.assign(pl, { t: 0, drop: 0, gone: false, respawn: 0 });
   }
 
-  function overlaps(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-  }
+  const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const solidPlatform = (pl) => !(pl.crumble && (pl.gone || pl.drop > 0)) && !(pl.power === 'appear' && pl.appear < 0.6);
 
   // =====================================================================
-  // Física (passo fixo de 1/60 s)
+  // Física (passo fixo 1/60 s)
   // =====================================================================
-  function stepPlayer() {
-    const p = player;
-
-    // plataformas que andam (levam o jogador junto)
+  function stepPlatforms() {
     for (const pl of L.platforms) {
       pl.prevX = pl.x;
-      if (pl.move) {
-        pl.x += pl.dir * pl.move.speed;
-        if (pl.x > pl.move.to) { pl.x = pl.move.to; pl.dir = -1; }
-        if (pl.x < pl.move.from) { pl.x = pl.move.from; pl.dir = 1; }
+      pl.prevY = pl.y;
+      if (pl.move && (pl.power !== 'move' || game.power)) {
+        const m = pl.move;
+        const key = m.axis;
+        if (pl.wait > 0) pl.wait--;
+        else {
+          pl[key] += pl.dir * m.speed;
+          if (pl[key] >= m.to) { pl[key] = m.to; pl.dir = -1; pl.wait = m.pause || 0; }
+          if (pl[key] <= m.from) { pl[key] = m.from; pl.dir = 1; pl.wait = m.pause || 0; }
+        }
+      }
+      if (pl.crumble) {
+        if (pl.gone) {
+          if (--pl.respawn <= 0) Object.assign(pl, { gone: false, t: 0, drop: 0 });
+        } else if (pl.drop > 0) {
+          pl.drop += 1 + pl.drop * 0.08;
+          if (pl.drop > 60) Object.assign(pl, { gone: true, respawn: 150, drop: 0 });
+        } else if (pl.t > 0) {
+          pl.t++;
+          if (pl.t > 30) {
+            pl.drop = 1;
+            sfx('crack');
+            puff(pl.x + pl.w / 2, pl.y + 8, 8, 'rgba(141,132,196,0.9)', 2);
+          }
+        }
+      }
+      if (pl.power === 'appear' && game.power && pl.appear < 1) {
+        if (pl.delay == null) pl.delay = pl.order * 14;
+        if (pl.delay > 0) pl.delay--;
+        else {
+          if (pl.appear === 0) { sfx('appear'); puff(pl.x + pl.w / 2, pl.y, 10, 'rgba(239,232,255,0.9)', 1.6); }
+          pl.appear = Math.min(1, pl.appear + 1 / 18);
+        }
       }
     }
-    if (p.onGround && p.standOn && p.standOn.move) p.x += p.standOn.x - p.standOn.prevX;
+  }
 
-    // andar
+  function stepPlayer() {
+    const p = player;
+    stepPlatforms();
+
+    // anda junto com a plataforma em que está
+    if (p.onGround && p.standOn) {
+      p.x += p.standOn.x - p.standOn.prevX;
+      p.y += p.standOn.y - p.standOn.prevY;
+    }
+
     const want = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     const acc = p.onGround ? PHYS.accel : PHYS.airAccel;
     if (want) {
-      p.vx += want * acc;
-      p.vx = Math.max(-PHYS.maxRun, Math.min(PHYS.maxRun, p.vx));
+      p.vx = Math.max(-PHYS.maxRun, Math.min(PHYS.maxRun, p.vx + want * acc));
       p.face = want;
     } else if (p.onGround) {
       p.vx = Math.abs(p.vx) <= PHYS.friction ? 0 : p.vx - Math.sign(p.vx) * PHYS.friction;
@@ -522,77 +681,85 @@
       p.vx *= 0.96;
     }
 
-    // pulo com tolerância (coyote) e memória do botão (buffer)
     p.coyote = p.onGround ? PHYS.coyote : Math.max(0, p.coyote - 1);
-    if (jumpPressed) p.buffer = PHYS.buffer;
-    else p.buffer = Math.max(0, p.buffer - 1);
+    p.buffer = jumpPressed ? PHYS.buffer : Math.max(0, p.buffer - 1);
     jumpPressed = false;
     if (p.buffer > 0 && p.coyote > 0) {
       p.vy = -PHYS.jump;
-      p.buffer = 0;
-      p.coyote = 0;
-      p.onGround = false;
-      p.standOn = null;
-      puff(p.x + p.w / 2, p.y + p.h, 4);
+      p.buffer = 0; p.coyote = 0;
+      p.onGround = false; p.standOn = null; p.airT = 0; p.landT = 0;
+      puff(p.x + PW / 2, p.y + PH, 5);
       sfx('jump');
     }
-    if (!keys.jump && p.vy < -1.5) p.vy *= PHYS.jumpCut + (1 - PHYS.jumpCut) * 0.5; // pulo curto se soltar cedo
+    if (!keys.jump && p.vy < -2.2) p.vy *= PHYS.jumpCut;
 
     // eixo x
     p.x += p.vx;
     for (const s of L.solids) {
       if (overlaps(p, s)) {
-        if (p.vx > 0) p.x = s.x - p.w; else if (p.vx < 0) p.x = s.x + s.w;
+        if (p.vx > 0) p.x = s.x - PW; else if (p.vx < 0) p.x = s.x + s.w;
         p.vx = 0;
       }
     }
-    p.x = Math.max(0, Math.min(W - p.w, p.x));
+    p.x = Math.max(0, Math.min(W - PW, p.x));
 
     // eixo y
     const wasGround = p.onGround;
-    const prevBottom = p.y + p.h;
+    const prevBottom = p.y + PH;
     p.vy = Math.min(PHYS.maxFall, p.vy + PHYS.grav);
     p.y += p.vy;
     p.onGround = false;
     p.standOn = null;
     for (const s of L.solids) {
       if (!overlaps(p, s)) continue;
-      if (p.vy >= 0 && prevBottom <= s.y + 0.5) {
-        p.y = s.y - p.h; p.vy = 0; p.onGround = true;
-      } else if (p.vy < 0) {
-        p.y = s.y + s.h; p.vy = 0;
-      }
+      if (p.vy >= 0 && prevBottom <= s.y + 0.5) { p.y = s.y - PH; p.vy = 0; p.onGround = true; }
+      else if (p.vy < 0) { p.y = s.y + s.h; p.vy = 0; }
     }
     for (const pl of L.platforms) {
-      const within = p.x + p.w > pl.x + 1 && p.x < pl.x + pl.w - 1;
-      if (within && p.vy >= 0 && prevBottom <= pl.y + 0.5 && p.y + p.h >= pl.y) {
-        p.y = pl.y - p.h; p.vy = 0; p.onGround = true; p.standOn = pl;
+      if (!solidPlatform(pl)) continue;
+      const within = p.x + PW > pl.x + 1 && p.x < pl.x + pl.w - 1;
+      if (within && p.vy >= 0 && prevBottom <= pl.y + 0.5 && p.y + PH >= pl.y) {
+        p.y = pl.y - PH; p.vy = 0; p.onGround = true; p.standOn = pl;
       }
     }
-    if (p.onGround && !wasGround && prevBottom > 0) {
-      p.squash = 6;
-      puff(p.x + p.w / 2, p.y + p.h, 5, 'rgba(255,240,220,0.75)', 1.2);
+    if (p.standOn && p.standOn.crumble && p.standOn.t === 0) p.standOn.t = 1;
+    if (p.onGround && !wasGround) {
+      p.landT = 12;
+      puff(p.x + PW / 2, p.y + PH, 6, 'rgba(216,207,245,0.75)', 1.6);
       sfx('land');
     }
-    p.squash = Math.max(0, p.squash - 1);
-    p.runT = p.onGround && Math.abs(p.vx) > 0.25 ? p.runT + 1 : 0;
+    p.landT = Math.max(0, p.landT - 1);
+    p.airT = p.onGround ? 0 : p.airT + 1;
+    p.runT = p.onGround && Math.abs(p.vx) > 0.4 ? p.runT + 1 : 0;
 
-    // caiu no buraco
-    if (p.y > H + 24) {
+    // caiu
+    if (p.y > H + 40) {
       game.deaths++;
-      game.shake = 10;
+      game.shake = 12;
       sfx('fall');
       resetPlayer();
-      puff(p.x + p.w / 2, p.y + p.h, 10, 'rgba(126,224,129,0.9)', 1.6);
     }
 
-    // porta: abre quando o jogador chega perto, entra quando está na frente
+    // alavanca: encostar liga
+    const lv = L.lever;
+    if (lv && !lv.on && overlaps(p, { x: lv.x - 2, y: lv.y - 18, w: 14, h: 18 })) {
+      lv.on = true;
+      game.power = true;
+      game.shake = 6;
+      sfx('lever');
+      puff(lv.x + 5, lv.y - 14, 10, 'rgba(239,232,255,0.95)', 1.8);
+    }
+    if (lv && lv.on) lv.anim = Math.min(1, lv.anim + 0.15);
+
+    // porta
     const d = L.door;
-    const cx = p.x + p.w / 2;
-    const near = Math.abs(cx - (d.x + 8)) < 52 && Math.abs(p.y + p.h - d.y) < 4;
+    const cx = p.x + PW / 2;
+    const dc = d.x + 12;
+    const below = p.y + PH - d.y; // 0 = mesma altura da porta; positivo = abaixo
+    const near = Math.abs(cx - dc) < 90 && below > -6 && below < 40;
     if (near && game.doorOpen === 0) sfx('door');
     if (near || game.doorOpen > 0) game.doorOpen = Math.min(1, game.doorOpen + 1 / 16);
-    if (game.doorOpen >= 0.7 && p.onGround && Math.abs(cx - (d.x + 8)) < 6 && Math.abs(p.y + p.h - d.y) < 1) {
+    if (game.doorOpen >= 0.7 && p.onGround && Math.abs(cx - dc) < 11 && Math.abs(below) < 1) {
       game.mode = 'enter';
       p.enterT = 0;
       p.vx = 0;
@@ -601,14 +768,8 @@
 
   function step() {
     game.t++;
-    for (const c of clouds) {
-      c.x += c.v;
-      if (c.x > W + 10) c.x = -c.w * 10 - 10;
-    }
-    particles = particles.filter((q) => {
-      q.x += q.vx; q.y += q.vy; q.vy += 0.03; q.life--;
-      return q.life > 0;
-    });
+    for (const c of clouds) { c.x += c.v; if (c.x > W + 20) c.x = -c.w * 14 - 20; }
+    particles = particles.filter((q) => { q.x += q.vx; q.y += q.vy; q.vy += q.g; q.life--; return q.life > 0; });
     if (game.shake > 0) game.shake--;
     if (game.banner > 0) game.banner--;
 
@@ -628,28 +789,26 @@
       game.frames++;
       stepPlayer();
       if (game.doorOpen > 0 && game.t % 4 === 0) {
-        L.door && particles.push({ x: L.door.x + 3 + Math.random() * 10, y: L.door.y - 4 - Math.random() * 18, vx: 0, vy: -0.25, life: 30, color: 'rgba(255,241,201,0.9)' });
+        particles.push({ x: L.door.x + 4 + Math.random() * 16, y: L.door.y - 6 - Math.random() * 28, vx: 0, vy: -0.3, life: 34, color: 'rgba(239,232,255,0.9)', g: 0 });
       }
       return;
     }
     if (game.mode === 'enter') {
       const p = player;
       p.enterT++;
-      p.x += (L.door.x + 8 - p.w / 2 - p.x) * 0.2;
-      if (p.enterT > 18) p.hidden = true;
-      if (p.enterT > 26) { game.mode = 'iris-out'; game.iris = 1; }
+      p.x += (L.door.x + 12 - PW / 2 - p.x) * 0.2;
+      p.vx = 0;
+      p.fade = Math.max(0, 1 - Math.max(0, p.enterT - 8) / 12);
+      stepPlatforms();
+      if (p.enterT > 22) p.hidden = true;
+      if (p.enterT > 30) { game.mode = 'iris-out'; game.iris = 1; }
       return;
     }
     if (game.mode === 'iris-out') {
       game.iris = Math.max(0, game.iris - 1 / 32);
       if (game.iris === 0) {
-        if (game.level + 1 < LEVELS.length) {
-          loadLevel(game.level + 1);
-          game.mode = 'iris-in';
-        } else {
-          game.mode = 'end';
-          game.iris = 1;
-        }
+        if (game.level + 1 < LEVELS.length) { loadLevel(game.level + 1); game.mode = 'iris-in'; }
+        else { game.mode = 'end'; game.iris = 1; }
       }
       return;
     }
@@ -669,15 +828,23 @@
     if (game.shake) ctx.translate(Math.round((Math.random() * 2 - 1) * 2), Math.round((Math.random() * 2 - 1) * 2));
     ctx.drawImage(bg, 0, 0);
     for (const s of stars) {
-      const on = Math.sin(t * 0.05 + s.p) > -0.3;
-      ctx.fillStyle = on ? 'rgba(255,241,220,0.9)' : 'rgba(255,241,220,0.35)';
+      const tw = Math.sin(t * 0.04 + s.p);
+      ctx.fillStyle = tw > 0.2 ? 'rgba(243,238,255,0.95)' : 'rgba(243,238,255,0.35)';
       ctx.fillRect(s.x, s.y, 1, 1);
+      if (s.big && tw > 0.6) {
+        ctx.fillStyle = 'rgba(243,238,255,0.4)';
+        ctx.fillRect(s.x - 1, s.y, 3, 1);
+        ctx.fillRect(s.x, s.y - 1, 1, 3);
+      }
     }
     for (const c of clouds) drawCloud(c.x, c.y, c.w);
 
     const level = L || (loadLevel(0), L);
+    drawWire(level, t);
+    for (const pl of level.platforms) drawRails(pl);
     for (const s of level.solids) drawSolid(s);
-    for (const pl of level.platforms) drawPlatform(pl);
+    for (const pl of level.platforms) drawPlatform(pl, t);
+    if (level.lever) drawLever(level.lever, t);
     drawDoor(level.door, game.doorOpen, t);
     for (const q of particles) {
       ctx.fillStyle = q.color;
@@ -686,57 +853,47 @@
     if (game.mode !== 'title') drawPlayer(player, t);
     ctx.restore();
 
-    // HUD
     if (game.mode === 'play' || game.mode === 'enter' || game.mode === 'iris-in') {
-      drawText(level.name, 6, 6);
-      drawText(`QUEDAS ${game.deaths}`, W - 6, 6, { align: 'right' });
+      drawText(level.name, 8, 8, { s: 2 });
+      drawText(`QUEDAS ${game.deaths}`, W - 8, 8, { s: 2, align: 'right' });
       if (game.banner > 0) {
-        const a = Math.min(1, game.banner / 30);
-        ctx.globalAlpha = a;
-        drawText(level.name, W / 2, 20, { s: 3, align: 'center' });
-        drawText(level.tip, W / 2, 41, { align: 'center', color: C.scarf });
-        if (game.level === 0) drawText('< > ANDAR    ESPAÇO PULAR', W / 2, 52, { align: 'center', color: C.textDim });
+        ctx.globalAlpha = Math.min(1, game.banner / 30);
+        drawText(level.name, W / 2, 30, { s: 5, align: 'center' });
+        drawText(level.tip, W / 2, 62, { s: 2, align: 'center', color: C.accent });
+        if (game.level === 0) drawText('< > ANDAR     ESPAÇO PULAR', W / 2, 78, { align: 'center', color: C.textDim });
         ctx.globalAlpha = 1;
       }
     }
 
-    // transição em íris
     if (game.mode === 'iris-out' || game.mode === 'iris-in') {
-      const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
-      const r = Math.max(0, game.iris) * 380;
+      const cx = player.x + PW / 2, cy = player.y + PH / 2;
       ctx.fillStyle = C.ink;
       ctx.beginPath();
       ctx.rect(0, 0, W, H);
-      ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+      ctx.arc(cx, cy, Math.max(0, game.iris) * 560, 0, Math.PI * 2, true);
       ctx.fill();
     }
 
     if (game.mode === 'title') {
-      ctx.fillStyle = 'rgba(26,18,38,0.72)';
+      ctx.fillStyle = 'rgba(12,10,22,0.72)';
       ctx.fillRect(0, 0, W, H);
-      drawText('LÁ EM CIMA', W / 2, 46, { s: 4, align: 'center' });
-      drawText('UM PEQUENO JOGO DE PULAR', W / 2, 74, { align: 'center', color: C.scarf });
-      // personagem grande no título
-      ctx.save();
-      ctx.translate(W / 2, 124);
-      ctx.scale(3, 3);
-      const fake = { ...player, x: -4, y: -12, onGround: true, vx: 0, vy: 0, face: 1, hidden: false, squash: 0 };
-      drawPlayer(fake, t);
-      ctx.restore();
-      if (Math.floor(t / 30) % 2 === 0) drawText('APERTE ESPAÇO OU TOQUE PARA COMEÇAR', W / 2, 146, { align: 'center' });
-      drawText('M LIGA/DESLIGA O SOM', W / 2, 164, { align: 'center', color: C.textDim });
+      drawText('LÁ EM CIMA', W / 2, 44, { s: 6, align: 'center' });
+      drawText('UM PEQUENO JOGO DE PULAR NA NOITE', W / 2, 88, { s: 2, align: 'center', color: C.accent });
+      drawSprite('idle', Math.floor(t / 11) % 4, W / 2, 200, 1, 2);
+      if (Math.floor(t / 30) % 2 === 0) drawText('APERTE ESPAÇO OU TOQUE PARA COMEÇAR', W / 2, 220, { s: 2, align: 'center' });
+      drawText('M LIGA/DESLIGA O SOM', W / 2, 244, { align: 'center', color: C.textDim });
     }
 
     if (game.mode === 'end') {
-      ctx.fillStyle = 'rgba(26,18,38,0.82)';
+      ctx.fillStyle = 'rgba(12,10,22,0.85)';
       ctx.fillRect(0, 0, W, H);
-      drawText('VOCÊ CHEGOU', W / 2, 40, { s: 3, align: 'center' });
-      drawText('LÁ EM CIMA!', W / 2, 62, { s: 3, align: 'center', color: C.scarf });
+      drawText('VOCÊ CHEGOU', W / 2, 40, { s: 5, align: 'center' });
+      drawText('LÁ EM CIMA!', W / 2, 74, { s: 5, align: 'center', color: C.accent });
+      drawSprite('land', 4, W / 2, 168, 1, 1.5);
       const secs = Math.floor(game.frames / 60);
-      drawText(`TEMPO ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, 98, { align: 'center' });
-      drawText(`QUEDAS ${game.deaths}`, W / 2, 108, { align: 'center' });
-      drawText('MAIS FASES EM BREVE', W / 2, 126, { align: 'center', color: C.textDim });
-      if (Math.floor(t / 30) % 2 === 0) drawText('ESPAÇO OU TOQUE PARA JOGAR DE NOVO', W / 2, 150, { align: 'center' });
+      drawText(`TEMPO ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}     QUEDAS ${game.deaths}`, W / 2, 184, { s: 2, align: 'center' });
+      drawText('MAIS FASES EM BREVE', W / 2, 206, { align: 'center', color: C.textDim });
+      if (Math.floor(t / 30) % 2 === 0) drawText('ESPAÇO OU TOQUE PARA JOGAR DE NOVO', W / 2, 228, { s: 2, align: 'center' });
     }
   }
 
@@ -764,7 +921,6 @@
   });
   window.addEventListener('blur', () => { keys.left = keys.right = keys.jump = false; });
 
-  // botões de toque (vários dedos ao mesmo tempo)
   document.querySelectorAll('.pad button').forEach((b) => {
     const k = b.dataset.key;
     const on = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch {} b.classList.add('on'); setKey(k, true); };
@@ -775,13 +931,12 @@
     b.addEventListener('lostpointercapture', off);
     b.addEventListener('contextmenu', (e) => e.preventDefault());
   });
-  // tocar na tela começa o jogo
   canvas.addEventListener('pointerdown', () => {
     if (game.mode === 'title' || game.mode === 'end') jumpPressed = true;
   });
 
   // =====================================================================
-  // Laço principal com passo fixo
+  // Laço com passo fixo
   // =====================================================================
   let last = performance.now();
   let acc = 0;
@@ -799,18 +954,21 @@
 
   // Gancho para testes automatizados (avança quadros de forma determinística).
   window.jogo = {
+    W, H, PW, PH,
     pause() { paused = true; },
     resume() { paused = false; },
     key(k, down) { setKey(k, down); },
     step(n = 1) { for (let i = 0; i < n; i++) step(); render(); },
     teleport(x, y) { Object.assign(player, { x, y, vx: 0, vy: 0, onGround: false, standOn: null }); },
+    goto(i) { loadLevel(i); game.mode = 'play'; game.iris = 1; game.banner = 0; },
     state() {
       return {
-        mode: game.mode, level: game.level, deaths: game.deaths, doorOpen: game.doorOpen,
-        x: player.x, y: player.y, onGround: player.onGround,
+        mode: game.mode, level: game.level, deaths: game.deaths, doorOpen: game.doorOpen, power: game.power,
+        x: player.x, y: player.y, onGround: player.onGround, anim: playerFrame(player, game.t)[0],
         standOn: player.standOn ? L.platforms.indexOf(player.standOn) : (player.onGround ? 'chão' : null),
-        platforms: L.platforms.map((p) => ({ x: p.x, y: p.y, w: p.w })),
-        door: L.door,
+        platforms: L.platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, solid: solidPlatform(p), gone: !!p.gone })),
+        door: L.door, lever: L.lever && { x: L.lever.x, y: L.lever.y, on: L.lever.on },
+        spriteReady: sheet.complete && sheet.naturalWidth > 0,
       };
     },
   };
