@@ -54,6 +54,59 @@
   .pad button.on { background: rgba(183, 156, 255, 0.35); border-color: #c9b6ff; }
   .pad .jump { width: 84px; height: 84px; }
   .pad .fire { margin-bottom: 40px; }
+
+  /* ---------- Editor de fases ---------- */
+  .open-editor {
+    position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+    padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(214, 200, 255, 0.35);
+    background: rgba(14, 11, 30, 0.7); color: #efe8ff; font: 600 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer;
+  }
+  .open-editor:hover { background: rgba(183, 156, 255, 0.25); }
+  body.editing { place-items: start; padding: 64px 316px 12px 12px; }
+  body.editing .pad, body.editing .open-editor { display: none !important; }
+  body.editing canvas { cursor: crosshair; touch-action: none; }
+  .ed { font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #efe8ff; }
+  .ed button, .ed select, .ed input, .ed textarea { font: inherit; color: inherit; }
+  .ed-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; gap: 6px;
+    padding: 0 12px; background: #120f22; border-bottom: 1px solid #2c2646; overflow-x: auto; z-index: 5;
+  }
+  .ed-tools { display: flex; gap: 4px; }
+  .ed-tools button {
+    flex: none; height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid #2c2646;
+    background: #1b1730; cursor: pointer; white-space: nowrap;
+  }
+  .ed-tools button:hover { border-color: #6b5aa8; }
+  .ed-tools button[aria-pressed="true"] { background: #b79cff; color: #120f22; border-color: #b79cff; font-weight: 700; }
+  .ed-side {
+    position: fixed; top: 56px; right: 0; bottom: 0; width: 304px; padding: 12px; overflow-y: auto;
+    background: #120f22; border-left: 1px solid #2c2646; z-index: 5; display: flex; flex-direction: column; gap: 10px;
+  }
+  .ed-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ed-row > * { flex: 1; min-width: 0; }
+  .ed button.b { height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid #2c2646; background: #1b1730; cursor: pointer; }
+  .ed button.b:hover { border-color: #6b5aa8; }
+  .ed button.primary { background: #b79cff; color: #120f22; border-color: #b79cff; font-weight: 700; height: 40px; }
+  .ed button.danger:hover { border-color: #e06a8a; color: #ffb3c6; }
+  .ed select, .ed input[type=text], .ed input[type=number], .ed textarea {
+    height: 34px; padding: 0 8px; border-radius: 9px; border: 1px solid #2c2646; background: #0c0a16; width: 100%;
+  }
+  .ed input:focus-visible, .ed select:focus-visible, .ed button:focus-visible, .ed textarea:focus-visible { outline: 2px solid #b79cff; outline-offset: 1px; }
+  .ed h2 { margin: 0; font-size: 14px; color: #c9b6ff; }
+  .ed-props { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: #1b1730; border: 1px solid #2c2646; }
+  .ed-field { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; }
+  .ed-field label { color: #a99fce; }
+  .ed-help { margin: 0; color: #8d84c4; font-size: 12px; }
+  .ed-modal { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(6, 5, 12, 0.7); }
+  .ed-modal[hidden] { display: none; }
+  .ed-card { width: min(640px, 92vw); display: grid; gap: 10px; padding: 16px; border-radius: 14px; background: #120f22; border: 1px solid #433b68; }
+  .ed-card h3 { margin: 0; font-size: 15px; }
+  .ed-card textarea { height: 300px; padding: 8px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+  .ed-msg { margin: 0; min-height: 1.3em; color: #c9b6ff; }
+  @media (max-width: 760px) {
+    body.editing { padding: 64px 8px 46vh 8px; }
+    .ed-side { top: auto; left: 0; width: auto; height: 44vh; border-left: 0; border-top: 1px solid #2c2646; }
+  }
 </style>
 </head>
 <body>
@@ -66,6 +119,45 @@
 <div class="pad right" aria-hidden="true">
   <button class="fire" data-key="fire">FOGO</button>
   <button class="jump" data-key="jump">PULAR</button>
+</div>
+
+<button id="open-editor" class="open-editor" type="button" hidden>Editor de fases</button>
+
+<div id="ed" class="ed" hidden>
+  <div class="ed-bar"><div class="ed-tools" id="ed-tools" role="toolbar" aria-label="Ferramentas"></div></div>
+  <aside class="ed-side" aria-label="Editor de fases">
+    <div class="ed-row"><select id="ed-slot" aria-label="Fase sendo editada"></select></div>
+    <div class="ed-row">
+      <button class="b" id="ed-new" type="button">Nova</button>
+      <button class="b" id="ed-dup" type="button">Duplicar</button>
+      <button class="b danger" id="ed-del" type="button">Excluir</button>
+    </div>
+    <div class="ed-row"><select id="ed-copy" aria-label="Copiar uma fase do jogo"><option value="">Começar a partir de uma fase do jogo…</option></select></div>
+    <div class="ed-props" id="ed-props"></div>
+    <div class="ed-row"><button class="b primary" id="ed-test" type="button">▶ Testar fase (T)</button></div>
+    <div class="ed-row">
+      <button class="b" id="ed-undo" type="button">Desfazer</button>
+      <button class="b" id="ed-export" type="button">Exportar</button>
+      <button class="b" id="ed-import" type="button">Importar</button>
+    </div>
+    <div class="ed-row">
+      <button class="b" id="ed-playall" type="button">Jogar minhas fases</button>
+      <button class="b" id="ed-exit" type="button">Sair</button>
+    </div>
+    <p class="ed-help">Arraste para criar chão e plataformas. Clique para pôr os outros objetos. Com "Mover", clique para selecionar, arraste para mover e puxe a borda direita para mudar a largura. Delete apaga, Ctrl+Z desfaz, setas ajustam. Tudo é salvo neste navegador.</p>
+  </aside>
+  <div class="ed-modal" id="ed-modal" hidden>
+    <div class="ed-card" role="dialog" aria-modal="true" aria-labelledby="ed-modal-title">
+      <h3 id="ed-modal-title"></h3>
+      <textarea id="ed-text" spellcheck="false" aria-label="Código da fase"></textarea>
+      <div class="ed-row">
+        <button class="b" id="ed-copytext" type="button">Copiar</button>
+        <button class="b primary" id="ed-load" type="button">Carregar</button>
+        <button class="b" id="ed-close" type="button">Fechar</button>
+      </div>
+      <p class="ed-msg" id="ed-msg" role="status"></p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -243,9 +335,13 @@
   ctx.imageSmoothingEnabled = false;
 
   function fit() {
-    const vw = window.innerWidth, vh = window.innerHeight;
+    let vw = window.innerWidth, vh = window.innerHeight;
+    const editing = document.body.classList.contains('editing');
+    if (editing) {
+      if (vw <= 760) { vw -= 16; vh = vh * 0.54 - 72; } else { vw -= 328; vh -= 76; }
+    }
     let s = Math.min(vw / W, vh / H);
-    if (s >= 2) s = Math.floor(s);
+    if (s >= 2 && !editing) s = Math.floor(s);
     canvas.style.width = Math.round(W * s) + 'px';
     canvas.style.height = Math.round(H * s) + 'px';
   }
@@ -820,14 +916,26 @@
     level: 0, t: 0, deaths: 0, frames: 0,
     doorOpen: 0, iris: 1, banner: 0, shake: 0, power: {},
     ammo: 0, cool: 0, ammoShake: 0, deadT: 0, noEnemies: false,
+    set: LEVELS,        // lista de fases sendo jogada (oficiais ou do editor)
+    fromEditor: false,  // testando uma fase do editor
   };
   let L = null;
   const player = { x: 0, y: 0, w: PW, h: PH, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, runT: 0, airT: 0, landT: 0, hidden: false, enterT: 0, fade: null, pushing: false };
 
-  function loadLevel(i, retry = false) {
-    game.level = i;
-    const src = LEVELS[i];
-    L = {
+  // fios automáticos (fases do editor): de cada alavanca/botão até o que ele liga
+  function autoWires(src) {
+    const out = [];
+    const sources = [...(src.levers || []).map((l) => ({ ch: l.ch || 'a', x: l.x + 4, y: l.y + 2 })), ...(src.plates || []).map((p) => ({ ch: p.ch || 'a', x: p.x + 12, y: p.y + 2 }))];
+    const targets = [
+      ...(src.platforms || []).filter((p) => p.power).map((p) => ({ ch: p.ch || 'a', x: Math.round(p.x + p.w / 2), y: p.power === 'move' ? p.move.to + 10 : p.y + 6 })),
+      ...(src.gates || []).map((g) => ({ ch: g.ch || 'a', x: g.x + 4, y: g.top - 3 })),
+    ];
+    for (const a of sources) for (const b of targets) if (a.ch === b.ch) out.push({ ch: a.ch, pts: [[a.x, a.y], [a.x, b.y], [b.x, b.y]] });
+    return out;
+  }
+
+  function buildLevel(src) {
+    return {
       ...src,
       solids: src.solids.map((s) => ({ ...s })),
       platforms: src.platforms.map((p) => ({ ...p, ch: p.ch || 'a', dir: -1, wait: 0, prevX: p.x, prevY: p.y, t: 0, drop: 0, gone: false, respawn: 0, appear: 0, delay: null })),
@@ -837,9 +945,15 @@
       boxes: (src.boxes || []).map((b) => ({ x: b.x, y: b.y - BOX, w: BOX, h: BOX, vy: 0, home: { x: b.x, y: b.y - BOX }, standOn: null })),
       ghosts: (src.ghosts || []).map((g, k) => ({ ...g, hx: g.x, hy: g.y, ox: 0, dir: 1, face: 1, hp: g.hp || 2, maxHp: g.hp || 2, hurt: false, flash: 0, kx: 0, dead: false, deathT: 0, phase: k * 1.7 })),
       flames: (src.flames || []).map((f) => ({ ...f, taken: false })),
-      wires: src.wires || [],
+      wires: src.wires || autoWires(src),
       shots: [],
     };
+  }
+
+  function loadLevel(i, retry = false) {
+    game.level = i;
+    const src = game.set[i];
+    L = buildLevel(src);
     let k = 0;
     for (const pl of L.platforms) if (pl.power === 'appear') pl.order = k++;
     game.power = {};
@@ -1230,9 +1344,18 @@
     if (game.shake > 0) game.shake--;
     if (game.banner > 0) game.banner--;
 
+    if (game.mode === 'editor') { jumpPressed = firePressed = false; return; }
+    if (game.mode === 'end' && game.set !== LEVELS && jumpPressed) {
+      jumpPressed = false;
+      game.set = LEVELS;
+      game.mode = 'title';
+      return;
+    }
     if (game.mode === 'title' || game.mode === 'end') {
       if (jumpPressed) {
         jumpPressed = false;
+        game.set = LEVELS;
+        game.fromEditor = false;
         sfx('start');
         game.deaths = 0;
         game.frames = 0;
@@ -1281,7 +1404,8 @@
     if (game.mode === 'iris-out') {
       game.iris = Math.max(0, game.iris - 1 / 32);
       if (game.iris === 0) {
-        if (game.level + 1 < LEVELS.length) { loadLevel(game.level + 1); game.mode = 'iris-in'; }
+        if (game.fromEditor) { edOpen(`FASE CONCLUÍDA! QUEDAS: ${game.deaths}`); return; }
+        if (game.level + 1 < game.set.length) { loadLevel(game.level + 1); game.mode = 'iris-in'; }
         else { game.mode = 'end'; game.iris = 1; }
       }
       return;
@@ -1299,8 +1423,17 @@
   // =====================================================================
   function render() {
     const t = game.t;
+    if (game.mode === 'editor') return renderEditor(t);
     ctx.save();
     if (game.shake) ctx.translate(Math.round((Math.random() * 2 - 1) * 2), Math.round((Math.random() * 2 - 1) * 2));
+    drawScene(t);
+    if (game.mode !== 'title') drawPlayer(player, t);
+    ctx.restore();
+    drawHud(t);
+  }
+
+  // cenário + objetos da fase (sem o jogador)
+  function drawScene(t) {
     ctx.drawImage(bg, 0, 0);
     for (const s of stars) {
       const tw = Math.sin(t * 0.04 + s.p);
@@ -1331,9 +1464,9 @@
       ctx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
     }
     for (const s of L.shots) drawShot(s, t);
-    if (game.mode !== 'title') drawPlayer(player, t);
-    ctx.restore();
+  }
 
+  function drawHud(t) {
     if (['play', 'enter', 'iris-in', 'dead'].includes(game.mode)) {
       drawText(L.name, 8, 8, { s: 2 });
       drawText(`QUEDAS ${game.deaths}`, W - 8, 8, { s: 2, align: 'right' });
@@ -1346,8 +1479,9 @@
         ctx.globalAlpha = Math.min(1, game.banner / 30);
         drawText(L.name, W / 2, 30, { s: 5, align: 'center' });
         drawText(L.tip, W / 2, 62, { s: 2, align: 'center', color: C.accent });
-        if (game.level === 0) drawText('< > ANDAR     ESPAÇO PULAR', W / 2, 78, { align: 'center', color: C.textDim });
-        if (game.level === 4) drawText('X ATIRA - O FOGO É POUCO, PULAR EM CIMA NÃO GASTA', W / 2, 78, { align: 'center', color: C.textDim });
+        if (game.level === 0 && game.set === LEVELS) drawText('< > ANDAR     ESPAÇO PULAR', W / 2, 78, { align: 'center', color: C.textDim });
+        if (game.fromEditor) drawText('ESC VOLTA PARA O EDITOR', W / 2, 92, { align: 'center', color: C.textDim });
+        if (game.level === 4 && game.set === LEVELS) drawText('X ATIRA - O FOGO É POUCO, PULAR EM CIMA NÃO GASTA', W / 2, 78, { align: 'center', color: C.textDim });
         ctx.globalAlpha = 1;
       }
     }
@@ -1369,7 +1503,7 @@
       drawSprite('player', 'idle', Math.floor(t / 11) % 4, W / 2 - 30, 196, 1, 2);
       drawSprite('ghost', 'float', Math.floor(t / 7) % 8, W / 2 + 46, 140 + Math.sin(t * 0.06) * 4, -1, 1.5);
       if (Math.floor(t / 30) % 2 === 0) drawText('APERTE ESPAÇO OU TOQUE PARA COMEÇAR', W / 2, 214, { s: 2, align: 'center' });
-      drawText('SETAS ANDAM - ESPAÇO PULA - X ATIRA - M SOM', W / 2, 240, { align: 'center', color: C.textDim });
+      drawText('SETAS ANDAM - ESPAÇO PULA - X ATIRA - M SOM - E EDITOR DE FASES', W / 2, 240, { align: 'center', color: C.textDim });
     }
 
     if (game.mode === 'end') {
@@ -1399,6 +1533,7 @@
     keys[k] = down;
   }
   window.addEventListener('keydown', (e) => {
+    if (game.mode === 'editor') return;
     if (e.code === 'KeyM') { muted = !muted; return; }
     const k = KEYMAP[e.code];
     if (!k) return;
@@ -1426,6 +1561,523 @@
   });
 
   // =====================================================================
+  // Editor de fases
+  // =====================================================================
+  const SNAP = 4;
+  const snap = (v) => Math.round(v / SNAP) * SNAP;
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const STORE = 'laemcima-editor-v1';
+  const $ = (id) => document.getElementById(id);
+  const edUI = $('ed');
+  const openBtn = $('open-editor');
+
+  const blankLevel = (n) => ({
+    name: `MINHA FASE ${n}`, tip: '', ammo: 3,
+    start: { x: 24, y: 240 },
+    solids: [{ x: 0, y: 240, w: 480, h: 30 }],
+    platforms: [],
+    door: { x: 440, y: 240 },
+  });
+
+  const ed = { slots: [], slot: 0, tool: 'select', sel: null, drag: null, undo: [], toast: '', toastT: 0 };
+  const edLevel = () => ed.slots[ed.slot];
+
+  function edLoadStore() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (d && Array.isArray(d.slots) && d.slots.length) { ed.slots = d.slots; ed.slot = Math.min(d.slot || 0, d.slots.length - 1); }
+    } catch {}
+    if (!ed.slots.length) ed.slots = [blankLevel(1)];
+  }
+  function edSave() { try { localStorage.setItem(STORE, JSON.stringify({ slots: ed.slots, slot: ed.slot })); } catch {} }
+  function edRebuild() { L = buildLevel(edLevel()); game.power = {}; game.doorOpen = 0; }
+  function edToast(msg) { ed.toast = msg; ed.toastT = 180; }
+  function edSnapshot() { ed.undo.push(JSON.stringify({ slots: ed.slots, slot: ed.slot })); if (ed.undo.length > 100) ed.undo.shift(); }
+  function edChange(fn) { edSnapshot(); fn(edLevel()); edSave(); edRebuild(); edPanel(); }
+  function edUndo() {
+    const s = ed.undo.pop();
+    if (!s) return edToast('NADA PARA DESFAZER');
+    const d = JSON.parse(s);
+    ed.slots = d.slots; ed.slot = d.slot; ed.sel = null;
+    edSave(); edRebuild(); edPanel(); edSlots();
+  }
+
+  // ---------- objetos ----------
+  const SINGLE = ['door', 'start'];
+  const ORDER = ['start', 'door', 'flames', 'ghosts', 'boxes', 'levers', 'plates', 'gates', 'platforms', 'solids'];
+  const NAMES = {
+    solids: 'Chão / parede', platforms: 'Plataforma', ghosts: 'Fantasma', levers: 'Alavanca', plates: 'Botão',
+    gates: 'Portão', boxes: 'Caixa', flames: 'Chama', door: 'Porta', start: 'Início',
+  };
+  function objBox(kind, o) {
+    switch (kind) {
+      case 'solids': return { x: o.x, y: o.y, w: o.w, h: o.h };
+      case 'platforms': return { x: o.x, y: o.y, w: o.w, h: 10 };
+      case 'ghosts': return { x: o.x - 11, y: o.y - 12, w: 22, h: 30 };
+      case 'levers': return { x: o.x - 2, y: o.y - 18, w: 14, h: 18 };
+      case 'plates': return { x: o.x - 2, y: o.y - 6, w: 28, h: 6 };
+      case 'gates': return { x: o.x - 1, y: o.top, w: GATE_W + 2, h: o.bottom - o.top };
+      case 'boxes': return { x: o.x, y: o.y - BOX, w: BOX, h: BOX };
+      case 'flames': return { x: o.x - 5, y: o.y - 8, w: 10, h: 14 };
+      case 'door': return { x: o.x - 3, y: o.y - 40, w: 30, h: 40 };
+      case 'start': return { x: o.x - 4, y: o.y - 34, w: 20, h: 34 };
+    }
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+  function getObj(sel) { const lv = edLevel(); return sel.i == null ? lv[sel.kind] : (lv[sel.kind] || [])[sel.i]; }
+  function hitTest(x, y) {
+    const lv = edLevel();
+    for (const k of ORDER) {
+      const list = SINGLE.includes(k) ? [lv[k]] : lv[k] || [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const b = objBox(k, list[i]);
+        if (x >= b.x - 2 && x <= b.x + b.w + 2 && y >= b.y - 2 && y <= b.y + b.h + 2) return { kind: k, i: SINGLE.includes(k) ? null : i };
+      }
+    }
+    return null;
+  }
+  // topo da superfície mais próxima logo abaixo do clique
+  function surfaceAt(x, y) {
+    const lv = edLevel();
+    let best = null;
+    for (const s of [...lv.solids, ...lv.platforms]) {
+      if (x >= s.x && x <= s.x + s.w && s.y >= y - 10 && (best == null || s.y < best)) best = s.y;
+    }
+    return best == null ? snap(y) : best;
+  }
+
+  const TOOLS = [
+    ['select', 'Mover'], ['solid', 'Chão/parede'], ['plat', 'Plataforma'], ['crumble', 'Frágil'], ['moving', 'Que anda'],
+    ['elevator', 'Elevador'], ['light', 'Ponte de luz'], ['lever', 'Alavanca'], ['plate', 'Botão'], ['gate', 'Portão'],
+    ['box', 'Caixa'], ['ghost', 'Fantasma'], ['flame', 'Chama'], ['door', 'Porta'], ['start', 'Início'], ['erase', 'Apagar'],
+  ];
+  const RECT_TOOLS = ['solid', 'plat', 'crumble', 'moving', 'elevator', 'light'];
+
+  function setPlatType(o, type) {
+    delete o.crumble; delete o.move; delete o.elevator; delete o.power; delete o.ch;
+    if (type === 'crumble') o.crumble = true;
+    if (type === 'moving') o.move = { axis: 'x', from: o.x, to: Math.min(W - o.w, o.x + 80), speed: 0.8, pause: 14 };
+    if (type === 'elevator') { o.elevator = true; o.power = 'move'; o.ch = 'a'; o.move = { axis: 'y', from: Math.max(20, o.y - 120), to: o.y, speed: 1.3, pause: 50 }; }
+    if (type === 'light') { o.power = 'appear'; o.ch = 'a'; }
+  }
+  const platType = (o) => (o.elevator ? 'elevator' : o.power === 'appear' ? 'light' : o.move ? 'moving' : o.crumble ? 'crumble' : 'plat');
+
+  function createRect(tool, a, b) {
+    const x = Math.max(0, Math.min(a.x, b.x));
+    const w = Math.max(16, Math.abs(b.x - a.x));
+    if (tool === 'solid') return ['solids', { x, y: Math.min(a.y, b.y), w, h: Math.max(8, Math.abs(b.y - a.y)) }];
+    const p = { x, y: a.y, w: tool === 'elevator' ? Math.max(40, w) : w };
+    setPlatType(p, tool);
+    return ['platforms', p];
+  }
+  function createPoint(tool, x, y) {
+    const sy = surfaceAt(x, y);
+    switch (tool) {
+      case 'lever': return ['levers', { x: snap(x - 5), y: sy, ch: 'a' }];
+      case 'plate': return ['plates', { x: snap(x - 12), y: sy, ch: 'a' }];
+      case 'gate': return ['gates', { x: snap(x - 4), top: sy - 60, bottom: sy, ch: 'a' }];
+      case 'box': return ['boxes', { x: snap(x - 9), y: sy }];
+      case 'ghost': { const gx = snap(x), gy = snap(y); return ['ghosts', { x: gx, y: gy, from: Math.max(12, gx - 40), to: Math.min(W - 12, gx + 40), speed: 0.6, hp: 2 }]; }
+      case 'flame': return ['flames', { x: snap(x), y: snap(y) }];
+      case 'door': return ['door', { x: snap(x - 12), y: sy }];
+      case 'start': return ['start', { x: snap(x - 6), y: sy }];
+    }
+    return null;
+  }
+  function addObj(kind, o) {
+    edChange((lv) => {
+      if (SINGLE.includes(kind)) { lv[kind] = o; ed.sel = { kind, i: null }; }
+      else { (lv[kind] = lv[kind] || []).push(o); ed.sel = { kind, i: lv[kind].length - 1 }; }
+    });
+  }
+  function deleteSel() {
+    const sel = ed.sel;
+    if (!sel) return;
+    if (SINGLE.includes(sel.kind)) return edToast('A FASE PRECISA DE PORTA E INÍCIO');
+    edChange((lv) => { lv[sel.kind].splice(sel.i, 1); if (!lv[sel.kind].length) delete lv[sel.kind]; });
+    ed.sel = null;
+    edPanel();
+  }
+  function moveObj(kind, o, orig, dx, dy) {
+    if (orig.x != null) o.x = orig.x + dx;
+    if (kind === 'gates') { o.top = orig.top + dy; o.bottom = orig.bottom + dy; } else if (orig.y != null) o.y = orig.y + dy;
+    if (kind === 'ghosts') { o.from = orig.from + dx; o.to = orig.to + dx; }
+    if (kind === 'platforms' && orig.move) {
+      const d = orig.move.axis === 'x' ? dx : dy;
+      o.move.from = orig.move.from + d;
+      o.move.to = orig.move.to + d;
+    }
+  }
+
+  // ---------- entrada no canvas ----------
+  function toWorld(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height };
+  }
+  function onEdgeHandle(p) {
+    if (!ed.sel || !['solids', 'platforms'].includes(ed.sel.kind)) return null;
+    const b = objBox(ed.sel.kind, getObj(ed.sel));
+    if (Math.abs(p.x - (b.x + b.w)) <= 4 && p.y >= b.y - 3 && p.y <= b.y + b.h + 3) return 'w';
+    if (ed.sel.kind === 'solids' && Math.abs(p.y - (b.y + b.h)) <= 4 && p.x >= b.x && p.x <= b.x + b.w) return 'h';
+    return null;
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (game.mode !== 'editor') return;
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    const p = toWorld(e);
+    const sp = { x: snap(p.x), y: snap(p.y) };
+    const tool = ed.tool;
+    if (tool === 'select') {
+      const edge = onEdgeHandle(p);
+      if (edge) { edSnapshot(); ed.drag = { type: 'resize', edge, start: p, orig: clone(getObj(ed.sel)) }; return; }
+      ed.sel = hitTest(p.x, p.y);
+      edPanel();
+      if (ed.sel) { edSnapshot(); ed.drag = { type: 'move', start: p, orig: clone(getObj(ed.sel)), moved: false }; }
+      return;
+    }
+    if (tool === 'erase') {
+      const hit = hitTest(p.x, p.y);
+      if (hit) { ed.sel = hit; deleteSel(); }
+      return;
+    }
+    if (RECT_TOOLS.includes(tool)) { ed.drag = { type: 'create', start: sp, now: sp }; return; }
+    const made = createPoint(tool, p.x, p.y);
+    if (made) addObj(made[0], made[1]);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (game.mode !== 'editor') return;
+    const p = toWorld(e);
+    const sp = { x: snap(p.x), y: snap(p.y) };
+    ed.hover = p;
+    const d = ed.drag;
+    if (!d) return;
+    if (d.type === 'create') { d.now = sp; return; }
+    const o = getObj(ed.sel);
+    const dx = snap(p.x - d.start.x), dy = snap(p.y - d.start.y);
+    if (d.type === 'move') {
+      if (dx || dy) d.moved = true;
+      moveObj(ed.sel.kind, o, d.orig, dx, dy);
+    } else if (d.type === 'resize') {
+      if (d.edge === 'w') o.w = Math.max(16, d.orig.w + dx);
+      else o.h = Math.max(8, d.orig.h + dy);
+    }
+    edRebuild();
+  });
+  const endDrag = () => {
+    const d = ed.drag;
+    if (!d || game.mode !== 'editor') return;
+    ed.drag = null;
+    if (d.type === 'create') {
+      const [kind, o] = createRect(ed.tool, d.start, d.now);
+      addObj(kind, o);
+      return;
+    }
+    if (d.type === 'move' && !d.moved) ed.undo.pop(); // só selecionou
+    edSave(); edRebuild(); edPanel();
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  // ---------- painel de propriedades ----------
+  function fieldsFor(kind, o) {
+    const num = (label, get, set, step = 4) => ({ type: 'num', label, get, set, step });
+    const xy = [num('X', () => o.x, (v) => (o.x = v)), num('Y', () => o.y, (v) => (o.y = v))];
+    const ch = { type: 'sel', label: 'Energia', opts: [['a', 'Lilás (a)'], ['b', 'Azul (b)']], get: () => o.ch || 'a', set: (v) => (o.ch = v) };
+    switch (kind) {
+      case 'solids': return [...xy, num('Largura', () => o.w, (v) => (o.w = Math.max(8, v))), num('Altura', () => o.h, (v) => (o.h = Math.max(8, v)))];
+      case 'platforms': {
+        const type = platType(o);
+        const f = [
+          { type: 'sel', label: 'Tipo', opts: [['plat', 'Normal'], ['crumble', 'Frágil'], ['moving', 'Que anda'], ['elevator', 'Elevador'], ['light', 'Ponte de luz']], get: () => type, set: (v) => setPlatType(o, v), rebuild: true },
+          num('X', () => o.x, (v) => { if (o.move && o.move.axis === 'x') { o.move.to += v - o.x; o.move.from += v - o.x; } o.x = v; }),
+          num('Y', () => o.y, (v) => { if (o.elevator) o.move.to = v; o.y = v; }),
+          num('Largura', () => o.w, (v) => (o.w = Math.max(16, v))),
+        ];
+        if (type === 'moving') f.push(num('Vai de X', () => o.move.from, (v) => (o.move.from = v)), num('Até X', () => o.move.to, (v) => (o.move.to = v)), num('Velocidade', () => o.move.speed, (v) => (o.move.speed = Math.max(0.1, v)), 0.1));
+        if (type === 'elevator') f.push(num('Sobe até Y', () => o.move.from, (v) => (o.move.from = Math.min(v, o.y - 8))), num('Velocidade', () => o.move.speed, (v) => (o.move.speed = Math.max(0.1, v)), 0.1), ch);
+        if (type === 'light') f.push(ch);
+        return f;
+      }
+      case 'ghosts': return [...xy, num('Patrulha de X', () => o.from, (v) => (o.from = v)), num('Até X', () => o.to, (v) => (o.to = v)), num('Velocidade', () => o.speed, (v) => (o.speed = Math.max(0, v)), 0.1), num('Vida', () => o.hp || 2, (v) => (o.hp = Math.max(1, Math.round(v))), 1)];
+      case 'levers': case 'plates': return [...xy, ch];
+      case 'gates': return [num('X', () => o.x, (v) => (o.x = v)), num('Topo (Y)', () => o.top, (v) => (o.top = Math.min(v, o.bottom - 8))), num('Base (Y)', () => o.bottom, (v) => (o.bottom = Math.max(v, o.top + 8))), ch];
+      default: return xy;
+    }
+  }
+  function levelFields(lv) {
+    return [
+      { type: 'text', label: 'Nome', get: () => lv.name || '', set: (v) => (lv.name = v.toUpperCase().slice(0, 24)) },
+      { type: 'text', label: 'Dica', get: () => lv.tip || '', set: (v) => (lv.tip = v.toUpperCase().slice(0, 48)) },
+      { type: 'num', label: 'Tiros', step: 1, get: () => lv.ammo || 0, set: (v) => (lv.ammo = Math.max(0, Math.min(9, Math.round(v)))) },
+    ];
+  }
+  function edPanel() {
+    const box = $('ed-props');
+    box.replaceChildren();
+    const lv = edLevel();
+    const sel = ed.sel && getObj(ed.sel) ? ed.sel : null;
+    if (!sel) ed.sel = null;
+    const h = document.createElement('h2');
+    h.textContent = sel ? NAMES[sel.kind] : 'Fase';
+    box.appendChild(h);
+    const list = sel ? fieldsFor(sel.kind, getObj(sel)) : levelFields(lv);
+    list.forEach((f, k) => {
+      const row = document.createElement('div');
+      row.className = 'ed-field';
+      const id = `ed-f-${k}`;
+      const label = document.createElement('label');
+      label.htmlFor = id;
+      label.textContent = f.label;
+      let input;
+      if (f.type === 'sel') {
+        input = document.createElement('select');
+        for (const [v, t] of f.opts) { const op = document.createElement('option'); op.value = v; op.textContent = t; input.appendChild(op); }
+        input.value = f.get();
+      } else {
+        input = document.createElement('input');
+        input.type = f.type === 'num' ? 'number' : 'text';
+        if (f.step) input.step = f.step;
+        input.value = f.get();
+      }
+      input.id = id;
+      input.dataset.field = f.label;
+      input.addEventListener('focus', () => { ed.focusSnap = JSON.stringify({ slots: ed.slots, slot: ed.slot }); });
+      const apply = (commit) => {
+        const v = f.type === 'num' ? Number(input.value) : input.value;
+        if (f.type === 'num' && !Number.isFinite(v)) return;
+        if (commit && ed.focusSnap) { ed.undo.push(ed.focusSnap); ed.focusSnap = null; }
+        f.set(v);
+        edSave(); edRebuild();
+        if (sel == null) edSlots();
+        if (commit && (f.rebuild || f.type === 'sel')) edPanel();
+      };
+      input.addEventListener('input', () => apply(false));
+      input.addEventListener('change', () => apply(true));
+      row.append(label, input);
+      box.appendChild(row);
+    });
+    if (sel && !SINGLE.includes(sel.kind)) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'b danger';
+      del.textContent = 'Apagar objeto (Delete)';
+      del.addEventListener('click', deleteSel);
+      box.appendChild(del);
+    }
+    if (!sel) {
+      const tip = document.createElement('p');
+      tip.className = 'ed-help';
+      tip.textContent = 'Clique num objeto com a ferramenta "Mover" para editar as propriedades dele.';
+      box.appendChild(tip);
+    }
+  }
+
+  // ---------- barra de ferramentas e fases salvas ----------
+  const toolsBox = $('ed-tools');
+  for (const [id, label] of TOOLS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.tool = id;
+    b.textContent = label;
+    b.addEventListener('click', () => setTool(id));
+    toolsBox.appendChild(b);
+  }
+  function setTool(id) {
+    ed.tool = id;
+    toolsBox.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === id)));
+  }
+  function edSlots() {
+    const sel = $('ed-slot');
+    sel.replaceChildren();
+    ed.slots.forEach((lv, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${lv.name || 'SEM NOME'}`; sel.appendChild(o); });
+    sel.value = ed.slot;
+  }
+  $('ed-slot').addEventListener('change', (e) => { ed.slot = Number(e.target.value); ed.sel = null; edSave(); edRebuild(); edPanel(); });
+  $('ed-new').addEventListener('click', () => { edSnapshot(); ed.slots.push(blankLevel(ed.slots.length + 1)); ed.slot = ed.slots.length - 1; ed.sel = null; edSave(); edRebuild(); edPanel(); edSlots(); });
+  $('ed-dup').addEventListener('click', () => { edSnapshot(); const c = clone(edLevel()); c.name = (c.name + ' 2').slice(0, 24); ed.slots.splice(ed.slot + 1, 0, c); ed.slot++; edSave(); edRebuild(); edPanel(); edSlots(); });
+  $('ed-del').addEventListener('click', () => {
+    edSnapshot();
+    ed.slots.splice(ed.slot, 1);
+    if (!ed.slots.length) ed.slots.push(blankLevel(1));
+    ed.slot = Math.min(ed.slot, ed.slots.length - 1);
+    ed.sel = null; edSave(); edRebuild(); edPanel(); edSlots();
+    edToast('FASE EXCLUÍDA - CTRL+Z DESFAZ');
+  });
+  const copySel = $('ed-copy');
+  LEVELS.forEach((lv, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${lv.name} - ${lv.tip.toLowerCase()}`; copySel.appendChild(o); });
+  copySel.addEventListener('change', () => {
+    if (copySel.value === '') return;
+    edSnapshot();
+    const c = clone(LEVELS[Number(copySel.value)]);
+    delete c.wires;
+    c.name = `CÓPIA DA ${c.name}`;
+    ed.slots.push(c); ed.slot = ed.slots.length - 1; ed.sel = null;
+    copySel.value = '';
+    edSave(); edRebuild(); edPanel(); edSlots();
+  });
+  $('ed-undo').addEventListener('click', edUndo);
+  $('ed-test').addEventListener('click', edTest);
+  $('ed-exit').addEventListener('click', edExit);
+  $('ed-playall').addEventListener('click', () => {
+    game.set = clone(ed.slots);
+    game.fromEditor = false;
+    startSet();
+  });
+
+  // exportar / importar
+  const modal = $('ed-modal');
+  function showModal(title, text, canLoad) {
+    $('ed-modal-title').textContent = title;
+    $('ed-text').value = text;
+    $('ed-load').hidden = !canLoad;
+    $('ed-copytext').hidden = canLoad;
+    $('ed-msg').textContent = '';
+    modal.hidden = false;
+    $('ed-text').focus();
+  }
+  $('ed-export').addEventListener('click', () => showModal('Código da fase (copie e guarde, ou mande para adicionar ao jogo)', JSON.stringify(edLevel(), null, 2), false));
+  $('ed-import').addEventListener('click', () => showModal('Cole aqui o código de uma fase', '', true));
+  $('ed-close').addEventListener('click', () => { modal.hidden = true; });
+  $('ed-copytext').addEventListener('click', async () => {
+    const ta = $('ed-text');
+    try { await navigator.clipboard.writeText(ta.value); $('ed-msg').textContent = 'Copiado!'; }
+    catch { ta.select(); $('ed-msg').textContent = 'Selecionei o texto: use Ctrl+C para copiar.'; }
+  });
+  $('ed-load').addEventListener('click', () => {
+    try {
+      let data = JSON.parse($('ed-text').value);
+      if (!Array.isArray(data)) data = [data];
+      for (const lv of data) {
+        if (!lv || !lv.start || !lv.door || !Array.isArray(lv.solids) || !Array.isArray(lv.platforms)) throw new Error('faltam start, door, solids ou platforms');
+      }
+      edSnapshot();
+      ed.slots.push(...data);
+      ed.slot = ed.slots.length - 1; ed.sel = null;
+      edSave(); edRebuild(); edPanel(); edSlots();
+      modal.hidden = true;
+      edToast(data.length > 1 ? `${data.length} FASES IMPORTADAS` : 'FASE IMPORTADA');
+    } catch (err) {
+      $('ed-msg').textContent = `Não consegui ler esse código (${err.message}).`;
+    }
+  });
+
+  // ---------- abrir, testar, sair ----------
+  function setEditing(on) {
+    document.body.classList.toggle('editing', on);
+    edUI.hidden = !on;
+    fit();
+  }
+  function edOpen(msg) {
+    if (!ed.slots.length) edLoadStore();
+    game.mode = 'editor';
+    game.fromEditor = false;
+    game.set = LEVELS;
+    for (const k of Object.keys(keys)) keys[k] = false;
+    setEditing(true);
+    setTool(ed.tool);
+    edSlots(); edRebuild(); edPanel();
+    if (msg) edToast(msg);
+  }
+  function edExit() {
+    setEditing(false);
+    modal.hidden = true;
+    game.mode = 'title';
+    loadLevel(0);
+  }
+  function startSet() {
+    setEditing(false);
+    game.deaths = 0;
+    game.frames = 0;
+    loadLevel(0);
+    game.mode = 'iris-in';
+    game.iris = 0;
+    sfx('start');
+  }
+  function edTest() {
+    game.set = [clone(edLevel())];
+    game.fromEditor = true;
+    startSet();
+  }
+  openBtn.addEventListener('click', () => edOpen());
+
+  // ---------- desenho do editor ----------
+  function dashed(x0, y0, x1, y1, color) {
+    ctx.fillStyle = color;
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let i = 0; i <= n; i += 1) if (i % 6 < 3) ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1);
+  }
+  function outline(b, color) {
+    dashed(b.x, b.y, b.x + b.w, b.y, color); dashed(b.x, b.y + b.h, b.x + b.w, b.y + b.h, color);
+    dashed(b.x, b.y, b.x, b.y + b.h, color); dashed(b.x + b.w, b.y, b.x + b.w, b.y + b.h, color);
+  }
+  function renderEditor(t) {
+    drawScene(t);
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    for (let x = 0; x < W; x += 16) ctx.fillRect(x, 0, 1, H);
+    for (let y = 0; y < H; y += 16) ctx.fillRect(0, y, W, 1);
+    const lv = edLevel();
+    // caminhos: plataformas que andam, elevadores e patrulhas
+    for (const p of lv.platforms) {
+      if (p.move && p.move.axis === 'x') outline({ x: p.move.from, y: p.y - 1, w: p.move.to - p.move.from + p.w, h: 12 }, 'rgba(183,156,255,0.7)');
+      if (p.move && p.move.axis === 'y') outline({ x: p.x, y: p.move.from, w: p.w, h: 10 }, 'rgba(143,211,255,0.8)');
+    }
+    for (const g of lv.ghosts || []) dashed(g.from, g.y + 20, g.to, g.y + 20, 'rgba(255,170,200,0.7)');
+    // início
+    ctx.globalAlpha = 0.85;
+    drawSprite('player', 'idle', Math.floor(t / 11) % 4, lv.start.x + PW / 2, lv.start.y, 1);
+    ctx.globalAlpha = 1;
+    drawText('INÍCIO', lv.start.x + 6, lv.start.y - 42, { align: 'center', color: C.accent });
+    // seleção
+    if (ed.sel && getObj(ed.sel)) {
+      const b = objBox(ed.sel.kind, getObj(ed.sel));
+      outline({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 }, '#ffffff');
+      if (['solids', 'platforms'].includes(ed.sel.kind)) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(b.x + b.w - 1, b.y + b.h / 2 - 3, 3, 6);
+        if (ed.sel.kind === 'solids') ctx.fillRect(b.x + b.w / 2 - 3, b.y + b.h - 1, 6, 3);
+      }
+    }
+    // prévia do que está sendo desenhado
+    if (ed.drag && ed.drag.type === 'create') {
+      const [kind, o] = createRect(ed.tool, ed.drag.start, ed.drag.now);
+      outline(objBox(kind, o), '#ffffff');
+    }
+    drawText(`EDITOR - ${lv.name || ''}`, 6, 6, { color: C.textDim });
+    if (ed.toastT > 0) {
+      ed.toastT--;
+      ctx.globalAlpha = Math.min(1, ed.toastT / 30);
+      drawText(ed.toast, W / 2, 24, { s: 2, align: 'center', color: C.lilacHot });
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- teclado do editor ----------
+  window.addEventListener('keydown', (e) => {
+    if (game.mode !== 'editor') {
+      if (e.code === 'KeyE' && game.mode === 'title') { e.preventDefault(); edOpen(); }
+      if (e.code === 'Escape' && game.fromEditor && ['play', 'dead', 'iris-in', 'enter'].includes(game.mode)) { e.preventDefault(); edOpen(); }
+      return;
+    }
+    const tag = (e.target && e.target.tagName) || '';
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) { if (e.code === 'Escape' && !modal.hidden) modal.hidden = true; return; }
+    if (!modal.hidden) { if (e.code === 'Escape') modal.hidden = true; return; }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); edUndo(); return; }
+    if (e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); deleteSel(); return; }
+    if (e.code === 'Escape') { ed.sel = null; edPanel(); return; }
+    if (e.code === 'KeyT') { e.preventDefault(); edTest(); return; }
+    const nudge = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.code];
+    if (nudge && ed.sel) {
+      e.preventDefault();
+      const step = e.shiftKey ? 8 : 1;
+      const o = getObj(ed.sel);
+      edChange(() => moveObj(ed.sel.kind, o, clone(o), nudge[0] * step, nudge[1] * step));
+    }
+  }, true);
+
+  edLoadStore();
+
+  // =====================================================================
   // Laço com passo fixo
   // =====================================================================
   let last = performance.now();
@@ -1433,6 +2085,8 @@
   let paused = false;
   function frame(now) {
     requestAnimationFrame(frame);
+    const showOpen = game.mode === 'title';
+    if (openBtn.hidden === showOpen) openBtn.hidden = !showOpen;
     if (paused) { last = now; return; }
     acc += Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -1450,12 +2104,18 @@
     key(k, down) { setKey(k, down); },
     step(n = 1) { for (let i = 0; i < n; i++) step(); render(); },
     teleport(x, y) { Object.assign(player, { x, y, vx: 0, vy: 0, onGround: false, standOn: null }); },
-    goto(i) { loadLevel(i); game.mode = 'play'; game.iris = 1; game.banner = 0; },
+    goto(i) { game.set = LEVELS; game.fromEditor = false; loadLevel(i); game.mode = 'play'; game.iris = 1; game.banner = 0; },
+    editor: {
+      open: () => edOpen(),
+      state: () => ({ mode: game.mode, tool: ed.tool, sel: ed.sel, level: clone(edLevel()), slots: ed.slots.length, slot: ed.slot, toast: ed.toastT > 0 ? ed.toast : '' }),
+      // coordenadas do mundo → coordenadas da tela (para o teste clicar)
+      screen(x, y) { const r = canvas.getBoundingClientRect(); return { x: r.left + (x * r.width) / W, y: r.top + (y * r.height) / H }; },
+    },
     enemies(on) { game.noEnemies = !on; },
     moveGhost(i, x, y) { const g = L.ghosts[i]; Object.assign(g, { hx: x, hy: y, x, y, ox: 0, from: x, to: x, speed: 0 }); },
     state() {
       return {
-        mode: game.mode, level: game.level, deaths: game.deaths, doorOpen: game.doorOpen, power: { ...game.power },
+        mode: game.mode, level: game.level, fromEditor: game.fromEditor, deaths: game.deaths, doorOpen: game.doorOpen, power: { ...game.power },
         x: player.x, y: player.y, vy: player.vy, onGround: player.onGround, face: player.face, anim: playerFrame(player, game.t)[0],
         standOn: player.standOn ? L.platforms.indexOf(player.standOn) : (player.onGround ? 'chão' : null),
         platforms: L.platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, solid: solidPlatform(p), gone: !!p.gone })),

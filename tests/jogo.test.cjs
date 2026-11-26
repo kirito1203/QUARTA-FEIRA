@@ -402,6 +402,126 @@ const HELPERS = () => {
   await E(() => { const j = window.jogo; T.level(7, { enemies: true }); j.step(60); });
   await shot("jogo-09-fase8-inicio.png");
 
+  // ---------- Editor de fases ----------
+  {
+    const ectx = await browser.newContext({ viewport: { width: 1440, height: 860 } });
+    const ep = await ectx.newPage();
+    watch(ep);
+    await ep.goto(URL);
+    await ep.waitForTimeout(400);
+    const st = () => ep.evaluate(() => window.jogo.editor.state());
+    const at = (x, y) => ep.evaluate(([x, y]) => window.jogo.editor.screen(x, y), [x, y]);
+    const drag = async (x0, y0, x1, y1) => { const a = await at(x0, y0), b = await at(x1, y1); await ep.mouse.move(a.x, a.y); await ep.mouse.down(); await ep.mouse.move(b.x, b.y, { steps: 6 }); await ep.mouse.up(); };
+    const click = async (x, y) => { const a = await at(x, y); await ep.mouse.click(a.x, a.y); };
+    const tool = (id) => ep.click(`[data-tool="${id}"]`);
+
+    check(await ep.isVisible("#open-editor"), "editor: botão 'Editor de fases' na tela de título");
+    await ep.click("#open-editor");
+    let es = await st();
+    check(es.mode === "editor" && (await ep.isVisible("#ed-tools")), "editor: abre com ferramentas e painel");
+    check(es.level.platforms.length === 0 && es.level.solids.length === 1, "editor: fase nova começa só com chão, início e porta");
+
+    await tool("plat"); await drag(100, 192, 180, 192);
+    await tool("plat"); await drag(210, 150, 270, 150);
+    await tool("ghost"); await click(320, 216);
+    await tool("lever"); await click(140, 190);
+    await tool("elevator"); await drag(380, 228, 424, 228);
+    es = await st();
+    const plat = es.level.platforms[0];
+    check(es.level.platforms.length === 3 && plat.x === 100 && plat.w === 80 && plat.y === 192, `editor: arrastar cria plataforma (x=${plat.x}, largura=${plat.w})`);
+    check(es.level.ghosts && es.level.ghosts.length === 1, "editor: clique coloca fantasma");
+    check(es.level.levers && es.level.levers[0].y === 192, "editor: alavanca gruda na plataforma embaixo do clique");
+    check(es.level.platforms[2].elevator && es.level.platforms[2].move.to === 228, "editor: cria elevador");
+
+    await tool("select"); await click(130, 196);
+    es = await st();
+    check(es.sel && es.sel.kind === "platforms" && es.sel.i === 0, "editor: 'Mover' seleciona a plataforma");
+    await ep.fill('[data-field="Largura"]', "96");
+    await ep.press('[data-field="Largura"]', "Tab");
+    check((await st()).level.platforms[0].w === 96, "editor: mudar a largura no painel");
+    await ep.selectOption('[data-field="Tipo"]', "crumble");
+    check((await st()).level.platforms[0].crumble === true, "editor: trocar o tipo para frágil");
+    await ep.click("#ed-undo");
+    check(!(await st()).level.platforms[0].crumble, "editor: desfazer");
+    await drag(130, 196, 150, 180);
+    es = await st();
+    check(es.level.platforms[0].x === 120 && es.level.platforms[0].y === 176, `editor: arrastar move (x=${es.level.platforms[0].x}, y=${es.level.platforms[0].y})`);
+    await tool("erase"); await click(320, 216);
+    check(!(await st()).level.ghosts, "editor: 'Apagar' remove o fantasma");
+    await tool("ghost"); await click(320, 216);
+    await ep.screenshot({ path: path.join(OUT, "jogo-11-editor.png") });
+
+    // testar a fase
+    await ep.click("#ed-test");
+    await ep.waitForTimeout(700);
+    es = await ep.evaluate(() => window.jogo.state());
+    check(es.fromEditor && ["play", "iris-in"].includes(es.mode) && es.platforms.length === 3, "editor: 'Testar' joga a fase criada");
+    await ep.keyboard.press("Escape");
+    check((await st()).mode === "editor", "editor: Esc volta para o editor");
+    es = await ep.evaluate(() => {
+      const j = window.jogo;
+      document.getElementById("ed-test").click();
+      j.pause(); j.step(40);
+      const lv = j.state().levers[0];
+      j.teleport(lv.x, lv.y - j.PH); j.step(60);
+      return j.state();
+    });
+    check(es.power.a && es.platforms[2].y < 228, "editor: alavanca liga o elevador na fase testada");
+    es = await ep.evaluate(() => {
+      const j = window.jogo;
+      j.enemies(false);
+      const d = j.state().door;
+      j.teleport(d.x - 40, d.y - j.PH); j.step(2);
+      j.key("right", true);
+      for (let i = 0; i < 300 && j.state().mode !== "editor"; i++) j.step(1);
+      j.key("right", false);
+      j.enemies(true);
+      j.resume();
+      return window.jogo.editor.state();
+    });
+    check(es.mode === "editor" && es.toast.startsWith("FASE CONCLUÍDA"), `editor: chegar na porta volta ao editor (${es.toast})`);
+
+    // exportar / importar
+    await ep.click("#ed-export");
+    const code = await ep.inputValue("#ed-text");
+    const parsed = JSON.parse(code);
+    check(parsed.platforms.length === 3 && parsed.door && parsed.start, "editor: exportar mostra o código da fase");
+    await ep.click("#ed-close");
+    parsed.name = "IMPORTADA";
+    await ep.click("#ed-import");
+    await ep.fill("#ed-text", JSON.stringify(parsed));
+    await ep.click("#ed-load");
+    es = await st();
+    check(es.slots === 2 && es.level.name === "IMPORTADA", "editor: importar código cria uma fase nova");
+    await ep.click("#ed-import");
+    await ep.fill("#ed-text", "isso não é código");
+    await ep.click("#ed-load");
+    check((await ep.textContent("#ed-msg")).includes("Não consegui"), "editor: código inválido mostra aviso");
+    await ep.click("#ed-close");
+    await ep.selectOption("#ed-copy", "6");
+    es = await st();
+    check(es.slots === 3 && es.level.name.startsWith("CÓPIA") && es.level.levers.length === 2, "editor: dá para começar a partir de uma fase do jogo");
+
+    // fica salvo
+    await ep.reload();
+    await ep.waitForTimeout(400);
+    await ep.click("#open-editor");
+    es = await st();
+    check(es.slots === 3 && es.slot === 2, "editor: fases continuam salvas depois de recarregar");
+
+    // jogar todas
+    await ep.click("#ed-playall");
+    await ep.waitForTimeout(700);
+    es = await ep.evaluate(() => window.jogo.state());
+    check(!es.fromEditor && ["play", "iris-in"].includes(es.mode) && es.level === 0 && es.platforms.length === 3, "editor: 'Jogar minhas fases' joga as fases criadas em sequência");
+    await ep.evaluate(() => { window.jogo.pause(); });
+    await ep.keyboard.press("Escape");
+    await ep.evaluate(() => window.jogo.editor.open());
+    await ep.click("#ed-exit");
+    check((await ep.evaluate(() => window.jogo.state().mode)) === "title", "editor: 'Sair' volta para o título");
+    await ectx.close();
+  }
+
   // ---------- Celular ----------
   const phone = await browser.newContext({ ...devices["iPhone 13 landscape"] });
   const pp = await phone.newPage();
