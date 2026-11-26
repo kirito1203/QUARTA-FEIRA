@@ -134,10 +134,10 @@ const HELPERS = () => {
 
   // ================= FASE 1 =================
   can(await reach(0, 4, 60, 240, "right", 0), "fase 1: chão → 1ª plataforma");
-  can(await reach(0, 96, 140, 192, "right", 1), "fase 1: 1ª → 2ª");
-  can(await reach(0, 216, 260, 144, "right", 2), "fase 1: 2ª → 3ª");
+  can(await reach(0, 84, 114, 192, "right", 1), "fase 1: 1ª → 2ª");
+  can(await reach(0, 190, 218, 144, "right", 2), "fase 1: 2ª → 3ª");
   cannot(await reach(0, 4, 460, 240, "right", 2), "fase 1: do chão não dá para ir direto à última");
-  s = await J({ level: 0, x: 240, y: 144, dir: "right" });
+  s = await J({ level: 0, x: 210, y: 144, dir: "right" });
   s = await E(() => T.walkToDoor());
   check(s.level === 1, "fase 1 → fase 2 pela porta");
 
@@ -146,12 +146,12 @@ const HELPERS = () => {
   check(s.x < 40 && s.mode === "play", "fase 2: cair no buraco recomeça a fase");
   s = await E(() => { T.level(1); return T.rideFrom({ idx: 0, fx: 140, fy: 240, dir: "right", when: (p) => p.x < 175 }); });
   check(s.standOn === 0, "fase 2: dá para pular na plataforma que anda");
-  s = await E(() => { const j = window.jogo; for (let i = 0; i < 300 && j.state().platforms[0].x < 257; i++) j.step(1); j.key("right", true); j.key("jump", true); for (let i = 0; i < 120; i++) { j.step(1); if (i > 3 && j.state().onGround) break; } T.release(); j.step(20); return j.state(); });
+  s = await E(() => { const j = window.jogo; for (let i = 0; i < 300 && j.state().platforms[0].x < 265; i++) j.step(1); j.key("right", true); j.key("jump", true); for (let i = 0; i < 120; i++) { j.step(1); if (i > 3 && j.state().onGround) break; } T.release(); j.step(20); return j.state(); });
   check((s.standOn === "chão" || s.standOn === 1) && s.x > 300, `fase 2: a plataforma leva até o outro lado (pousou em ${s.standOn})`);
   can(await reach(1, 318, 360, 240, "right", 1), "fase 2: chão direito → plataforma");
   can(await reach(1, 345, 380, 192, "left", 2), "fase 2: → plataforma de cima");
-  can(await reach(1, 230, 262, 144, "left", 3), "fase 2: → plataforma da porta");
-  await J({ level: 1, x: 236, y: 144, dir: "left" });
+  can(await reach(1, 237, 270, 144, "left", 3), "fase 2: → plataforma da porta");
+  await J({ level: 1, x: 240, y: 144, dir: "left" });
   s = await E(() => T.walkToDoor());
   check(s.level === 2, "fase 2 → fase 3 pela porta");
 
@@ -159,9 +159,9 @@ const HELPERS = () => {
   s = await E(() => { T.level(2); window.jogo.step(200); return window.jogo.state(); });
   check(!s.power.a && s.platforms[2].y === 228, "fase 3: elevador parado antes da alavanca");
   can(await reach(2, 4, 40, 240, "right", 0), "fase 3: chão → plataforma A");
-  can(await reach(2, 100, 146, 192, "right", 1), "fase 3: A → plataforma B");
-  cannot(await reach(2, 190, 286, 144, "right", 3), "fase 3: de B não dá para pular até a porta");
-  s = await E(() => { const j = window.jogo; T.level(2); j.teleport(230, 144 - j.PH); j.step(3); return T.walk("right", 30); });
+  can(await reach(2, 84, 118, 192, "right", 1), "fase 3: A → plataforma B");
+  cannot(await reach(2, 174, 262, 144, "right", 3), "fase 3: de B não dá para pular até a porta");
+  s = await E(() => { const j = window.jogo; T.level(2); j.teleport(214, 144 - j.PH); j.step(3); return T.walk("right", 30); });
   check(s.power.a && s.levers[0].on, "fase 3: encostar na alavanca liga a energia");
   s = await E(() => { T.level(2, { power: true }); return T.rideFrom({ idx: 2, fx: 296, fy: 240, dir: "right", when: (p) => p.y > 215 }); });
   check(s.standOn === 2, "fase 3: dá para subir no elevador ligado");
@@ -172,27 +172,27 @@ const HELPERS = () => {
 
   // ================= FASE 4: chão que cai + ponte de luz =================
   can(await reach(3, 40, 80, 240, "right", 0), "fase 4: chão → frágil 1");
-  can(await reach(3, 140, 170, 222, "right", 1), "fase 4: frágil 1 → 2");
+  can(await reach(3, 136, 164, 222, "right", 1), "fase 4: frágil 1 → 2");
   can(await reach(3, 220, 248, 192, "right", 2), "fase 4: frágil 2 → 3");
-  can(await reach(3, 296, 326, 162, "right", 3), "fase 4: frágil 3 → plataforma da alavanca");
-  s = await E(() => { const j = window.jogo; T.level(3); j.teleport(140, 222 - j.PH); j.step(40); return j.state(); });
+  can(await reach(3, 304, 332, 162, "right", 3), "fase 4: frágil 3 → plataforma da alavanca");
+  s = await E(() => { const j = window.jogo; T.level(3); j.teleport(146, 222 - j.PH); j.step(40); return j.state(); });
   check(!s.platforms[0].solid, "fase 4: plataforma frágil cai se ficar parado nela");
-  cannot(await reach(3, 360, 400, 140, "left", 4), "fase 4: sem a alavanca a ponte de luz não existe");
-  can(await reach(3, 358, 390, 140, "left", 4, { power: true }), "fase 4: alavanca → luz 1");
-  can(await reach(3, 290, 310, 110, "left", 5, { power: true }), "fase 4: luz 1 → luz 2");
-  can(await reach(3, 196, 216, 88, "left", 6, { power: true }), "fase 4: luz 2 → luz 3");
-  can(await reach(3, 122, 142, 72, "left", 7, { power: true }), "fase 4: luz 3 → porta");
-  await J({ level: 3, power: true, x: 126, y: 72, dir: "left" });
+  cannot(await reach(3, 388, 420, 140, "left", 4), "fase 4: sem a alavanca a ponte de luz não existe");
+  can(await reach(3, 388, 410, 140, "left", 4, { power: true }), "fase 4: alavanca → luz 1");
+  can(await reach(3, 300, 320, 110, "left", 5, { power: true }), "fase 4: luz 1 → luz 2");
+  can(await reach(3, 212, 232, 88, "left", 6, { power: true }), "fase 4: luz 2 → luz 3");
+  can(await reach(3, 128, 150, 72, "left", 7, { power: true }), "fase 4: luz 3 → porta");
+  await J({ level: 3, power: true, x: 132, y: 72, dir: "left" });
   s = await E(() => T.walkToDoor());
   check(s.level === 4, "fase 4 → fase 5 pela porta");
   await E(() => window.jogo.step(1));
   await shot("jogo-02-fase5.png");
 
   // ================= FASE 5: fantasmas e fogo =================
-  can(await reach(4, 300, 340, 240, "right", 0), "fase 5: chão → plataforma 1");
+  can(await reach(4, 240, 300, 240, "right", 0), "fase 5: chão → plataforma 1");
   can(await reach(4, 300, 330, 192, "left", 1), "fase 5: plataforma 1 → 2");
-  can(await reach(4, 230, 262, 144, "right", 2), "fase 5: plataforma 2 → porta");
-  // tiro: flash, empurrão leve, derrota, munição gasta
+  can(await reach(4, 216, 244, 144, "right", 2), "fase 5: plataforma 2 → porta");
+  // tiro: flash, empurrão leve; fantasma normal tem 2 de vida
   s = await E(() => {
     const j = window.jogo;
     T.level(4, { enemies: true });
@@ -200,26 +200,39 @@ const HELPERS = () => {
     j.teleport(100, 240 - j.PH); j.step(2);
     T.walk("right", 2); j.step(4);
     const before = j.state();
-    j.key("fire", true); j.step(1); j.key("fire", false);
-    let hit = null;
-    for (let i = 0; i < 60 && !hit; i++) { j.step(1); const g = j.state().ghosts[0]; if (g && g.flash > 0) hit = { ...g, ammo: j.state().ammo }; }
+    const hits = [];
+    for (let k = 0; k < 2; k++) {
+      j.key("fire", true); j.step(1); j.key("fire", false);
+      const hp0 = j.state().ghosts[0].hp;
+      let maxOx = 0, flash = 0, got = null;
+      for (let i = 0; i < 40; i++) {
+        j.step(1);
+        const g = j.state().ghosts[0];
+        if (!g) break;
+        maxOx = Math.max(maxOx, g.ox); flash = Math.max(flash, g.flash);
+        if (!got && g.hp < hp0) got = { hp: g.hp, dead: g.dead, ammo: j.state().ammo };
+      }
+      hits.push({ ...got, maxOx, flash });
+    }
     j.step(40);
-    return { before, hit, after: j.state() };
+    return { before, hits, after: j.state() };
   });
-  check(s.hit && s.hit.flash > 0, "tiro acerta o fantasma e ele pisca branco");
-  check(s.hit && s.hit.kx > 0.5 && s.hit.kx < 3, `o tiro empurra o fantasma de leve (${s.hit && s.hit.kx.toFixed(2)})`);
-  check(s.before.ammo === 3 && s.hit.ammo === 2, `o tiro gasta munição (${s.before.ammo} → ${s.hit && s.hit.ammo})`);
-  check(s.after.ghosts.length === 1, "fantasma de 1 vida some depois do tiro");
+  check(s.before.ghosts[0].hp === 2, `fantasma normal tem 2 de vida (${s.before.ghosts[0].hp})`);
+  check(s.hits[0].hp === 1 && !s.hits[0].dead && s.hits[0].flash > 0, "1º tiro: o fantasma pisca branco e continua vivo");
+  check(s.hits[0].maxOx > 6 && s.hits[0].maxOx < 20, `1º tiro: empurrão leve (${s.hits[0].maxOx.toFixed(1)} px)`);
+  check(s.hits[1].dead, "2º tiro derruba o fantasma");
+  check(s.before.ammo === 4 && s.hits[1].ammo === 2, `cada tiro gasta uma chama (${s.before.ammo} → ${s.hits[1].ammo})`);
+  check(s.after.ghosts.length === 1, "o fantasma derrotado some");
   // munição acaba
   s = await E(() => {
     const j = window.jogo;
     T.level(4, { enemies: false });
     let fired = 0;
-    for (let i = 0; i < 6; i++) { const a = j.state().ammo; j.key("fire", true); j.step(1); j.key("fire", false); j.step(20); if (j.state().ammo < a) fired++; }
+    for (let i = 0; i < 8; i++) { const a = j.state().ammo; j.key("fire", true); j.step(1); j.key("fire", false); j.step(20); if (j.state().ammo < a) fired++; }
     return { fired, ammo: j.state().ammo };
   });
-  check(s.fired === 3 && s.ammo === 0, `o fogo é limitado: 6 tentativas, ${s.fired} tiros`);
-  // pular em cima
+  check(s.fired === 4 && s.ammo === 0, `o fogo é limitado: 8 tentativas, ${s.fired} tiros`);
+  // pular em cima: tira 2, derrota o normal
   s = await E(() => {
     const j = window.jogo;
     T.level(4, { enemies: true });
@@ -229,8 +242,8 @@ const HELPERS = () => {
     for (let i = 0; i < 40; i++) { j.step(1); const st = j.state(); if (st.ghosts[0] && st.ghosts[0].dead) killed = true; if (killed && st.vy < 0) bounced = true; }
     return { killed, bounced, mode: j.state().mode, ammo: j.state().ammo };
   });
-  check(s.killed && s.bounced && s.mode === "play", "pular em cima derrota o fantasma e quica");
-  check(s.ammo === 3, "pular em cima não gasta fogo");
+  check(s.killed && s.bounced && s.mode === "play", "pular em cima derrota o fantasma normal e quica");
+  check(s.ammo === 4, "pular em cima não gasta fogo");
   // encostar
   s = await E(() => {
     const j = window.jogo;
@@ -247,19 +260,20 @@ const HELPERS = () => {
   });
   check(s.died, "encostar no fantasma faz perder");
   check(s.after.deaths === s.d0 + 1 && s.after.mode === "play" && s.after.x < 40, "depois de perder, conta uma queda e a fase recomeça");
-  // atravessa a fase 5 com fantasmas, usando os tiros
+  // atravessa a fase 5 com fantasmas usando os 4 tiros
   s = await E(() => {
     const j = window.jogo;
     T.level(4, { enemies: true });
     j.moveGhost(0, 200, 216); j.moveGhost(1, 380, 74);
-    j.key("fire", true); j.step(1); j.key("fire", false); j.step(60);
+    for (let k = 0; k < 2; k++) { j.key("fire", true); j.step(1); j.key("fire", false); j.step(30); }
+    j.step(40);
     return j.state();
   });
-  check(s.ghosts.length === 1, "fase 5: o tiro limpa o caminho no chão");
+  check(s.ghosts.length === 1, "fase 5: dois tiros limpam o caminho no chão");
   await E(() => { window.jogo.enemies(false); });
-  await J({ x: 240, y: 144, dir: "right" });
-  s = await E(() => { const j = window.jogo; j.enemies(true); j.key("fire", true); j.step(1); j.key("fire", false); j.step(60); return j.state(); });
-  check(s.ghosts.length === 0, "fase 5: o segundo tiro derruba o fantasma da porta");
+  await J({ x: 236, y: 144, dir: "right" });
+  s = await E(() => { const j = window.jogo; j.enemies(true); for (let k = 0; k < 2; k++) { j.key("fire", true); j.step(1); j.key("fire", false); j.step(30); } j.step(40); return j.state(); });
+  check(s.ghosts.length === 0, "fase 5: mais dois tiros derrubam o fantasma da porta");
   s = await E(() => T.walkToDoor());
   check(s.level === 5, "fase 5 → fase 6 pela porta");
   await E(() => window.jogo.step(1));
@@ -299,30 +313,37 @@ const HELPERS = () => {
 
   // ================= FASE 7: duas alavancas =================
   can(await reach(6, 60, 100, 240, "right", 0), "fase 7: chão → degrau 1");
-  can(await reach(6, 150, 184, 192, "right", 1), "fase 7: degrau 1 → degrau da alavanca B");
-  cannot(await reach(6, 216, 292, 144, "right", 3), "fase 7: sem elevador não chega no alto");
-  s = await E(() => { const j = window.jogo; T.level(6, { enemies: true }); const a = j.state().ammo; j.teleport(146, 192 - j.PH); j.step(3); return { a, b: j.state().ammo, flames: j.state().flames }; });
+  can(await reach(6, 140, 158, 192, "right", 1), "fase 7: degrau 1 → degrau da alavanca B");
+  cannot(await reach(6, 214, 278, 144, "right", 3), "fase 7: sem elevador não chega no alto");
+  s = await E(() => { const j = window.jogo; T.level(6, { enemies: true }); const a = j.state().ammo; j.teleport(136, 192 - j.PH); j.step(3); return { a, b: j.state().ammo, flames: j.state().flames }; });
   check(s.b === s.a + 1 && s.flames === 0, `fase 7: pegar a chama recarrega o fogo (${s.a} → ${s.b})`);
   s = await E(() => {
     const j = window.jogo;
     T.level(6, { enemies: true });
     j.moveGhost(1, 200, 216);
-    j.teleport(130, 240 - j.PH); j.step(3);
-    const shots = [];
-    for (let k = 0; k < 2; k++) {
+    j.teleport(136, 192 - j.PH); j.step(3); // pega a chama do degrau: 3 + 1 tiros
+    j.teleport(120, 240 - j.PH); j.step(30);
+    const hp = [j.state().ghosts[1].hp];
+    for (let k = 0; k < 4; k++) {
       j.key("fire", true); j.step(1); j.key("fire", false);
-      let maxOx = 0;
-      const hp0 = j.state().ghosts[1].hp;
-      for (let i = 0; i < 40; i++) { j.step(1); const g = j.state().ghosts[1]; if (g) maxOx = Math.max(maxOx, g.ox); if (g && (g.hp < hp0) && shots.length === k) shots.push({ hp: g.hp, dead: g.dead, flash: g.flash }); }
-      if (shots[k]) shots[k].push = maxOx;
+      j.step(30);
+      const g = j.state().ghosts[1];
+      hp.push(g ? (g.dead ? "x" : g.hp) : "x");
     }
-    j.step(40);
-    return { shots, left: j.state().ghosts.length };
+    return { hp, ammo: j.state().ammo };
   });
-  check(s.shots.length === 2 && s.shots[0].hp === 1 && !s.shots[0].dead && s.shots[0].flash > 0, "fantasma forte: o 1º tiro só pisca (flash)");
-  check(s.shots[0] && s.shots[0].push > 6 && s.shots[0].push < 20, `fantasma forte: o 1º tiro empurra de leve (${s.shots[0] && s.shots[0].push.toFixed(1)} px)`);
-  check(s.shots[1] && s.shots[1].dead && s.left === 1, "fantasma forte: o 2º tiro derruba");
-  s = await E(() => { const j = window.jogo; T.level(6); j.teleport(240, 144 - j.PH); j.step(3); return T.walk("right", 30); });
+  check(s.hp.join(",") === "4,3,2,1,x", `fantasma forte: 4 de vida, cai no 4º tiro (${s.hp.join(" → ")})`);
+  s = await E(() => {
+    const j = window.jogo;
+    T.level(6, { enemies: true });
+    j.moveGhost(1, 200, 216);
+    j.teleport(194, 150); j.step(1);
+    let hpAfter = null, bounced = false;
+    for (let i = 0; i < 50; i++) { j.step(1); const st = j.state(); const g = st.ghosts[1]; if (g && g.hp < 4 && hpAfter == null) hpAfter = g.hp; if (hpAfter != null && st.vy < 0) bounced = true; }
+    return { hpAfter, bounced, mode: j.state().mode };
+  });
+  check(s.hpAfter === 2 && s.bounced && s.mode === "play", `pisão no fantasma forte tira 2 e não faz perder (vida ${s.hpAfter})`);
+  s = await E(() => { const j = window.jogo; T.level(6); j.teleport(230, 144 - j.PH); j.step(3); return T.walk("right", 30); });
   check(s.power.b && !s.power.a, "fase 7: alavanca B liga só o elevador (canal b)");
   s = await E(() => { const j = window.jogo; for (let i = 0; i < 40; i++) j.step(1); return j.state(); });
   check(s.platforms[2].y < 228 && !s.platforms[4].solid, "fase 7: elevador anda, ponte continua apagada");
@@ -341,10 +362,10 @@ const HELPERS = () => {
     return j.state();
   });
   check(s.standOn === 4, `fase 7: do elevador pula para a ponte de luz (pousou em ${s.standOn})`);
-  can(await reach(6, 254, 282, 76, "left", 6, { power: true }), "fase 7: luz 2 → luz 3");
-  can(await reach(6, 336, 360, 80, "left", 5, { power: true }), "fase 7: luz 1 → luz 2");
-  can(await reach(6, 172, 196, 72, "left", 7, { power: true }), "fase 7: luz 3 → porta");
-  await J({ level: 6, power: true, x: 176, y: 72, dir: "left" });
+  can(await reach(6, 248, 280, 76, "left", 6, { power: true }), "fase 7: luz 2 → luz 3");
+  can(await reach(6, 336, 368, 80, "left", 5, { power: true }), "fase 7: luz 1 → luz 2");
+  can(await reach(6, 160, 192, 72, "left", 7, { power: true }), "fase 7: luz 3 → porta");
+  await J({ level: 6, power: true, x: 164, y: 72, dir: "left" });
   s = await E(() => T.walkToDoor());
   check(s.level === 7, "fase 7 → fase 8 pela porta");
   await E(() => window.jogo.step(1));
@@ -352,10 +373,10 @@ const HELPERS = () => {
 
   // ================= FASE 8: tudo junto =================
   can(await reach(7, 200, 240, 240, "right", 1), "fase 8: chão → frágil 1");
-  can(await reach(7, 266, 294, 196, "right", 2), "fase 8: frágil 1 → frágil 2");
-  s = await E(() => { T.level(7); return T.rideFrom({ idx: 3, fx: 336, fy: 152, dir: "left", when: (p) => p.x > 270 }); });
+  can(await reach(7, 252, 280, 196, "right", 2), "fase 8: frágil 1 → frágil 2");
+  s = await E(() => { T.level(7); return T.rideFrom({ idx: 3, fx: 336, fy: 152, dir: "left", when: (p) => p.x > 280 }); });
   check(s.standOn === 3, "fase 8: frágil 2 → plataforma que anda");
-  s = await E(() => { const j = window.jogo; T.level(7); return T.rideFrom({ idx: 3, fx: 330, fy: 240, dir: "left", when: () => false, max: 0 }) && (function () { j.teleport(186, 110 - j.PH); for (let i = 0; i < 400 && j.state().platforms[3].x > 181; i++) j.step(1); j.teleport(j.state().platforms[3].x + 4, 110 - j.PH); j.step(2); j.key("left", true); j.key("jump", true); for (let i = 0; i < 120; i++) { j.step(1); if (i > 3 && j.state().onGround) break; } T.release(); return j.state(); })(); });
+  s = await E(() => { const j = window.jogo; T.level(7); return T.rideFrom({ idx: 3, fx: 330, fy: 240, dir: "left", when: () => false, max: 0 }) && (function () { j.teleport(186, 110 - j.PH); for (let i = 0; i < 400 && j.state().platforms[3].x > 191; i++) j.step(1); j.teleport(j.state().platforms[3].x + 4, 110 - j.PH); j.step(2); j.key("left", true); j.key("jump", true); for (let i = 0; i < 120; i++) { j.step(1); if (i > 3 && j.state().onGround) break; } T.release(); return j.state(); })(); });
   check(s.standOn === 0 && s.x >= 120, `fase 8: da plataforma que anda chega à beira da porta (x=${s.x.toFixed(0)})`);
   s = await E(() => T.walk("left", 60));
   check(s.x >= 119.5 && s.level === 7 && s.mode === "play", "fase 8: portão fechado bloqueia a porta");
@@ -402,7 +423,7 @@ const HELPERS = () => {
   await fire("fire", "pointerdown");
   await pp.waitForTimeout(100);
   await fire("fire", "pointerup");
-  check((await pp.evaluate(() => window.jogo.state().ammo)) === 2, "botão FOGO atira");
+  check((await pp.evaluate(() => window.jogo.state().ammo)) === 3, "botão FOGO atira");
   const fits = await pp.evaluate(() => {
     const c = document.querySelector("canvas").getBoundingClientRect();
     return c.width <= innerWidth + 1 && c.height <= innerHeight + 1;
