@@ -17,8 +17,9 @@ Sempre que for criado ou alterado um site neste repositório:
 
 ## Lá em Cima (jogo de plataforma)
 
-- Um arquivo só: `jogo/index.html` (HTML + canvas, sem dependências). Cenário, fonte de letras e sons são feitos no código; o personagem vem da sprite sheet do usuário.
-- Sprite do personagem: `jogo/sprites/original.png` → `python3 tools/extract_sprites.py` recorta, reduz, limpa as cores e embute a folha no `jogo/index.html` (entre `/*SPRITE-START*/` e `/*SPRITE-END*/`). `jogo/sprites/preview.png` mostra o resultado ampliado. Rodar de novo se a sprite mudar.
-- Tema: noite, paleta lavanda/branco/roxo escuro (objeto `C` no script). Resolução 480×270.
-- Fases ficam na lista `LEVELS` no começo do script: chão sólido em `solids`, plataformas em `platforms` (dá para atravessar por baixo; `move` faz andar, `crumble` cai, `power` só funciona com a alavanca ligada), `lever`, `wire` (fio decorativo) e a `door`.
-- Testar: `node tests/jogo.test.cjs [pasta-de-screenshots]`. O teste pausa o jogo e avança quadro a quadro com `window.jogo`, prova que cada pulo é possível e joga as fases até o fim. Ao criar ou mudar uma fase, adicione os pulos dela ao teste.
+- Um arquivo só: `jogo/index.html` (HTML + canvas, sem dependências). Cenário, fonte de letras e sons são feitos no código; personagem e fantasma vêm das sprite sheets do usuário.
+- Sprites: originais em `jogo/sprites/*-original.png`. `python3 tools/extract_sprites.py` recorta, reduz, limpa as cores e embute as folhas no `jogo/index.html` (entre `/*SPRITE-START*/` e `/*SPRITE-END*/`); os `*-preview.png` mostram o resultado ampliado. Para uma sprite nova, adicione uma entrada em `SHEETS` no script.
+- Tema: noite, paleta lavanda/branco/roxo escuro (objeto `C`). Resolução 480×270. Controles: setas/A-D, Espaço pula, X/J atira, M som.
+- Fases na lista `LEVELS`: `solids` (sólido), `platforms` (atravessa por baixo; `move`, `crumble`, `power: 'move'|'appear'` + `ch`), `levers` e `plates` (dão energia ao canal `ch`, 'a' ou 'b'), `gates` (abrem com energia), `boxes`, `ghosts` (x,y = olhos; `hp`), `flames` (+1 tiro), `ammo`, `wires` (decorativo) e `door`.
+- Encostar num fantasma ou cair recomeça a fase inteira e conta uma queda.
+- Testar: `node tests/jogo.test.cjs [pasta-de-screenshots]`. O teste pausa o jogo e avança quadro a quadro com `window.jogo` (desliga os fantasmas nos testes de caminho), prova que cada pulo é possível, que os atalhos não funcionam, e atravessa as fases até o fim. Ao criar ou mudar uma fase, adicione os passos dela ao teste.
