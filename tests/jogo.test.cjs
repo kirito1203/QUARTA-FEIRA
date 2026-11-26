@@ -519,6 +519,10 @@ const HELPERS = () => {
     await ep.evaluate(() => window.jogo.editor.open());
     await ep.click("#ed-exit");
     check((await ep.evaluate(() => window.jogo.state().mode)) === "title", "editor: 'Sair' volta para o título");
+    await ep.evaluate(() => window.jogo.goto(1));
+    check(!(await ep.isVisible("#back-btn")), "computador: botão Voltar fica escondido (usa Esc)");
+    await ep.keyboard.press("Escape");
+    check((await ep.evaluate(() => window.jogo.state().mode)) === "title", "computador: Esc no jogo volta para o título");
     await ectx.close();
   }
 
@@ -550,6 +554,24 @@ const HELPERS = () => {
   });
   check(fits, "o jogo cabe na tela do celular deitado");
   await pp.screenshot({ path: path.join(OUT, "jogo-10-celular.png") });
+
+  // botão voltar no celular
+  await pp.evaluate(() => { window.jogo.goto(2); });
+  await pp.waitForTimeout(200);
+  check(await pp.isVisible("#back-btn"), "celular: botão Voltar aparece durante o jogo");
+  check((await pp.textContent("#back-btn")).trim() === "Menu", "celular: no jogo normal o botão diz 'Menu'");
+  await pp.tap("#back-btn");
+  await pp.waitForTimeout(200);
+  check((await pp.evaluate(() => window.jogo.state().mode)) === "title" && !(await pp.isVisible("#back-btn")), "celular: Voltar leva ao título e some");
+  await pp.evaluate(() => window.jogo.editor.open());
+  await pp.tap("#ed-test");
+  await pp.waitForTimeout(600);
+  check((await pp.textContent("#back-btn")).trim() === "Editor", "celular: testando fase do editor o botão diz 'Editor'");
+  await pp.tap("#back-btn");
+  await pp.waitForTimeout(200);
+  check((await pp.evaluate(() => window.jogo.state().mode)) === "editor", "celular: Voltar leva de volta ao editor");
+  await pp.tap("#ed-exit");
+
 
   check(errors.length === 0, `nenhum erro no console${errors.length ? ": " + [...new Set(errors)].join(" | ") : ""}`);
   await browser.close();

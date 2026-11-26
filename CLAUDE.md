@@ -19,7 +19,7 @@ Sempre que for criado ou alterado um site neste repositório:
 
 - Um arquivo só: `jogo/index.html` (HTML + canvas, sem dependências). Cenário, fonte de letras e sons são feitos no código; personagem e fantasma vêm das sprite sheets do usuário.
 - Sprites: originais em `jogo/sprites/*-original.png`. `python3 tools/extract_sprites.py` recorta, reduz, limpa as cores e embute as folhas no `jogo/index.html` (entre `/*SPRITE-START*/` e `/*SPRITE-END*/`); os `*-preview.png` mostram o resultado ampliado. Para uma sprite nova, adicione uma entrada em `SHEETS` no script.
-- Tema: noite, paleta lavanda/branco/roxo escuro (objeto `C`). Resolução 480×270. Controles: setas/A-D, Espaço pula, X/J atira, M som.
+- Tema: noite, paleta lavanda/branco/roxo escuro (objeto `C`). Resolução 480×270. Controles: setas/A-D, Espaço pula, X/J atira, M som, Esc volta (no celular, botão Voltar no topo).
 - Fases na lista `LEVELS`: `solids` (sólido), `platforms` (atravessa por baixo; `move`, `crumble`, `power: 'move'|'appear'` + `ch`), `levers` e `plates` (dão energia ao canal `ch`, 'a' ou 'b'), `gates` (abrem com energia), `boxes`, `ghosts` (x,y = olhos; `hp`, padrão 2; tiro tira 1, pisão tira 2), `flames` (+1 tiro), `ammo`, `wires` (decorativo) e `door`.
 - Encostar num fantasma ou cair recomeça a fase inteira e conta uma queda.
 - Editor de fases embutido (botão "Editor de fases" ou tecla E no título): cria fases no mesmo formato de `LEVELS`, salva no `localStorage` (`laemcima-editor-v1`), testa na hora e exporta/importa em JSON. Fases do editor sem `wires` ganham fios automáticos (`autoWires`). Para colocar uma fase criada pelo usuário no jogo oficial, cole o JSON exportado na lista `LEVELS` e adicione os passos dela ao teste.

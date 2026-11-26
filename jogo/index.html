@@ -55,6 +55,18 @@
   .pad .jump { width: 84px; height: 84px; }
   .pad .fire { margin-bottom: 40px; }
 
+  /* ---------- Botão voltar (telas de toque) ---------- */
+  .back-btn {
+    position: fixed; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    display: none; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 12px;
+    border-radius: 999px; border: 2px solid rgba(214, 200, 255, 0.3); background: rgba(14, 11, 30, 0.6);
+    color: #efe8ff; font: 700 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    touch-action: manipulation; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  .back-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .back-btn:active { background: rgba(183, 156, 255, 0.35); }
+  @media (pointer: coarse) { .back-btn:not([hidden]) { display: flex; } }
+
   /* ---------- Editor de fases ---------- */
   .open-editor {
     position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
@@ -122,6 +134,7 @@
 </div>
 
 <button id="open-editor" class="open-editor" type="button" hidden>Editor de fases</button>
+<button id="back-btn" class="back-btn" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Menu</span></button>
 
 <div id="ed" class="ed" hidden>
   <div class="ed-bar"><div class="ed-tools" id="ed-tools" role="toolbar" aria-label="Ferramentas"></div></div>
@@ -1480,7 +1493,7 @@
         drawText(L.name, W / 2, 30, { s: 5, align: 'center' });
         drawText(L.tip, W / 2, 62, { s: 2, align: 'center', color: C.accent });
         if (game.level === 0 && game.set === LEVELS) drawText('< > ANDAR     ESPAÇO PULAR', W / 2, 78, { align: 'center', color: C.textDim });
-        if (game.fromEditor) drawText('ESC VOLTA PARA O EDITOR', W / 2, 92, { align: 'center', color: C.textDim });
+        if (game.fromEditor) drawText('ESC OU VOLTAR: EDITOR', W / 2, 92, { align: 'center', color: C.textDim });
         if (game.level === 4 && game.set === LEVELS) drawText('X ATIRA - O FOGO É POUCO, PULAR EM CIMA NÃO GASTA', W / 2, 78, { align: 'center', color: C.textDim });
         ctx.globalAlpha = 1;
       }
@@ -2001,6 +2014,19 @@
   }
   openBtn.addEventListener('click', () => edOpen());
 
+  // Voltar: da fase testada para o editor; do jogo para o título
+  const backBtn = $('back-btn');
+  const BACK_MODES = ['play', 'dead', 'enter', 'iris-in', 'iris-out', 'end'];
+  function goBack() {
+    for (const k of Object.keys(keys)) keys[k] = false;
+    document.querySelectorAll('.pad button.on').forEach((b) => b.classList.remove('on'));
+    if (game.fromEditor) return edOpen();
+    game.set = LEVELS;
+    game.mode = 'title';
+    loadLevel(0);
+  }
+  backBtn.addEventListener('click', goBack);
+
   // ---------- desenho do editor ----------
   function dashed(x0, y0, x1, y1, color) {
     ctx.fillStyle = color;
@@ -2056,7 +2082,7 @@
   window.addEventListener('keydown', (e) => {
     if (game.mode !== 'editor') {
       if (e.code === 'KeyE' && game.mode === 'title') { e.preventDefault(); edOpen(); }
-      if (e.code === 'Escape' && game.fromEditor && ['play', 'dead', 'iris-in', 'enter'].includes(game.mode)) { e.preventDefault(); edOpen(); }
+      if (e.code === 'Escape' && BACK_MODES.includes(game.mode)) { e.preventDefault(); goBack(); }
       return;
     }
     const tag = (e.target && e.target.tagName) || '';
@@ -2087,6 +2113,10 @@
     requestAnimationFrame(frame);
     const showOpen = game.mode === 'title';
     if (openBtn.hidden === showOpen) openBtn.hidden = !showOpen;
+    const showBack = BACK_MODES.includes(game.mode);
+    if (backBtn.hidden === showBack) backBtn.hidden = !showBack;
+    const backLabel = game.fromEditor ? 'Editor' : 'Menu';
+    if (showBack && backBtn.lastChild.textContent !== backLabel) backBtn.lastChild.textContent = backLabel;
     if (paused) { last = now; return; }
     acc += Math.min(0.1, (now - last) / 1000);
     last = now;
