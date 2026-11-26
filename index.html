@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Pulinho – Jogo de Plataforma</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #14101e;
+    color: #fff;
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 3px solid #3a2f55;
+    border-radius: 6px;
+    box-shadow: 0 0 40px #0008;
+  }
+  #hud {
+    position: absolute; left: 12px; top: 8px;
+    font-size: clamp(12px, 2.4vmin, 22px);
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000;
+    pointer-events: none;
+  }
+  #msg {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; gap: 12px;
+    font-size: clamp(14px, 3vmin, 28px);
+    font-weight: bold;
+    text-shadow: 3px 3px 0 #000;
+    background: #0009;
+    border-radius: 6px;
+  }
+  #msg.hidden { display: none; }
+  #msg h1 { font-size: 1.8em; color: #ffd84a; letter-spacing: 2px; }
+  #msg small { font-size: 0.65em; opacity: 0.85; font-weight: normal; }
+  .blink { animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Controles de toque (celular) */
+  #touch {
+    position: fixed; left: 0; right: 0; bottom: 14px;
+    display: none; justify-content: space-between;
+    padding: 0 18px; pointer-events: none;
+  }
+  #touch .grp { display: flex; gap: 14px; }
+  #touch button {
+    pointer-events: auto;
+    width: 70px; height: 70px; border-radius: 50%;
+    border: 3px solid #fff6; background: #fff2; color: #fff;
+    font-size: 28px; font-weight: bold;
+  }
+  #touch button.on { background: #fff5; }
+  @media (pointer: coarse) { #touch { display: flex; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="320" height="180"></canvas>
+  <div id="hud">FASE 1</div>
+  <div id="msg">
+    <h1>PULINHO</h1>
+    <div>Pule nas plataformas e chegue na porta!</div>
+    <small>← → ou A D para andar &nbsp;·&nbsp; ESPAÇO / ↑ / W para pular</small>
+    <div class="blink">Aperte ESPAÇO ou toque para começar</div>
+  </div>
+</div>
+
+<div id="touch">
+  <div class="grp">
+    <button id="bL">◀</button>
+    <button id="bR">▶</button>
+  </div>
+  <div class="grp">
+    <button id="bJ">▲</button>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const W = 320, H = 180;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+const wrap = document.getElementById("wrap");
+const hud = document.getElementById("hud");
+const msg = document.getElementById("msg");
+
+// ---------- Ajusta o tamanho na tela (escala inteira quando possível) ----------
+function resize() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H) * 0.96;
+  const scale = s >= 2 ? Math.floor(s) : s;
+  wrap.style.width = W * scale + "px";
+  wrap.style.height = H * scale + "px";
+}
+window.addEventListener("resize", resize);
+resize();
+
+// ---------- Sprites em pixel art (desenhados à mão como texto) ----------
+// Cada letra é uma cor; "." é transparente.
+const PAL = {
+  H: "#5a3418", // cabelo
+  h: "#7a4a24",
+  S: "#f6c89a", // pele
+  E: "#1b1b2a", // olhos
+  B: "#e8423f", // camiseta
+  b: "#b72d2f",
+  P: "#2f5fb3", // calça
+  K: "#3b2a20", // sapato
+  W: "#ffffff",
+};
+
+const PLAYER_IDLE = [
+  "..HHHH..",
+  ".HhHHHH.",
+  ".HSSSSH.",
+  ".SSESES.",
+  ".SSSSSS.",
+  "..SSSS..",
+  ".BBBBBB.",
+  "SBbBBbBS",
+  ".BBBBBB.",
+  ".PPPPPP.",
+  ".PP..PP.",
+  ".KK..KK.",
+];
+const PLAYER_WALK1 = [
+  "..HHHH..",
+  ".HhHHHH.",
+  ".HSSSSH.",
+  ".SSESES.",
+  ".SSSSSS.",
+  "..SSSS..",
+  ".BBBBBB.",
+  "SBbBBbB.",
+  ".BBBBBBS",
+  ".PPPPPP.",
+  "PP...PP.",
+  "KK....KK",
+];
+const PLAYER_WALK2 = [
+  "..HHHH..",
+  ".HhHHHH.",
+  ".HSSSSH.",
+  ".SSESES.",
+  ".SSSSSS.",
+  "..SSSS..",
+  ".BBBBBB.",
+  ".BbBBbBS",
+  "SBBBBBB.",
+  ".PPPPPP.",
+  "..PPPP..",
+  "..KKKK..",
+];
+const PLAYER_JUMP = [
+  "..HHHH..",
+  ".HhHHHH.",
+  ".HSSSSH.",
+  ".SSESES.",
+  ".SSSSSS.",
+  "S.SSSS.S",
+  "SBBBBBBS",
+  ".BbBBbB.",
+  ".BBBBBB.",
+  ".PPPPPP.",
+  ".PP..PP.",
+  "KK....KK",
+];
+
+function makeSprite(rows, pal) {
+  const c = document.createElement("canvas");
+  c.width = rows[0].length;
+  c.height = rows.length;
+  const g = c.getContext("2d");
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch !== "." && pal[ch]) {
+        g.fillStyle = pal[ch];
+        g.fillRect(x, y, 1, 1);
+      }
+    });
+  });
+  return c;
+}
+
+const SPR = {
+  idle: makeSprite(PLAYER_IDLE, PAL),
+  walk1: makeSprite(PLAYER_WALK1, PAL),
+  walk2: makeSprite(PLAYER_WALK2, PAL),
+  jump: makeSprite(PLAYER_JUMP, PAL),
+};
+
+// Gerador pseudo-aleatório com semente (para texturas sempre iguais)
+function rng(seed) {
+  return () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+
+// ---------- Fases ----------
+// plataformas: x, y, largura, altura. "ground" é o chão.
+const LEVELS = [
+  {
+    name: "FASE 1",
+    theme: "day",
+    start: { x: 20, y: 140 },
+    platforms: [
+      { x: 0,   y: 164, w: 320, h: 16, ground: true },
+      { x: 70,  y: 134, w: 56,  h: 8 },
+      { x: 150, y: 104, w: 56,  h: 8 },
+      { x: 232, y: 72,  w: 72,  h: 8 },
+    ],
+    door: { x: 276, y: 52 },
+  },
+  {
+    name: "FASE 2",
+    theme: "dusk",
+    start: { x: 14, y: 140 },
+    platforms: [
+      { x: 0,   y: 164, w: 120, h: 16, ground: true },
+      { x: 168, y: 164, w: 152, h: 16, ground: true },
+      { x: 128, y: 140, w: 40,  h: 8 },
+      { x: 236, y: 128, w: 48,  h: 8 },
+      { x: 170, y: 98,  w: 40,  h: 8 },
+      { x: 90,  y: 72,  w: 48,  h: 8 },
+      { x: 12,  y: 46,  w: 60,  h: 8 },
+    ],
+    door: { x: 22, y: 26 },
+  },
+];
+
+// ---------- Estado ----------
+const player = {
+  x: 0, y: 0, w: 8, h: 12,
+  vx: 0, vy: 0,
+  onGround: false, face: 1,
+  coyote: 0, buffer: 0, anim: 0,
+};
+let levelIndex = 0;
+let level = LEVELS[0];
+let state = "title"; // title | play | door | fade | end
+let doorOpen = 0;    // 0 = fechada, 1 = aberta
+let fade = 0;
+let fadeDir = 0;
+let timer = 0;
+let particles = [];
+let bgCache = null;
+
+const keys = {};
+let jumpPressed = false;
+
+// ---------- Som simples (Web Audio) ----------
+let actx = null;
+function beep(freq, dur, type = "square", vol = 0.08, slide = 0) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, actx.currentTime);
+    if (slide) o.frequency.linearRampToValueAtTime(freq + slide, actx.currentTime + dur);
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.connect(g).connect(actx.destination);
+    o.start();
+    o.stop(actx.currentTime + dur);
+  } catch (e) { /* sem som, sem problema */ }
+}
+
+// ---------- Fundo (pré-renderizado por fase) ----------
+function buildBackground(theme) {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const r = rng(theme === "day" ? 7 : 99);
+
+  const sky = theme === "day"
+    ? ["#5ec8f2", "#76d3f4", "#8fdcf5", "#a9e5f7", "#c4eef9"]
+    : ["#2a1f4f", "#4a2a6a", "#7a3a78", "#b24f72", "#e57a62"];
+  const band = Math.ceil(H / sky.length);
+  sky.forEach((col, i) => { g.fillStyle = col; g.fillRect(0, i * band, W, band); });
+
+  if (theme === "day") {
+    // sol
+    g.fillStyle = "#fff6b0"; circle(g, 40, 30, 12);
+    g.fillStyle = "#ffe866"; circle(g, 40, 30, 10);
+    // nuvens
+    [[90, 26], [200, 18], [270, 40], [140, 50]].forEach(([x, y]) => cloud(g, x, y));
+  } else {
+    // estrelas
+    g.fillStyle = "#fff";
+    for (let i = 0; i < 40; i++) g.fillRect((r() * W) | 0, (r() * 70) | 0, 1, 1);
+    // lua
+    g.fillStyle = "#fbe9c4"; circle(g, 270, 30, 10);
+    g.fillStyle = "#4a2a6a"; circle(g, 275, 27, 9);
+  }
+
+  // morros ao fundo
+  const hillA = theme === "day" ? "#7fc96b" : "#5a2f5e";
+  const hillB = theme === "day" ? "#5fae55" : "#3e2249";
+  hills(g, hillA, 120, 26, 0.035, 1.3);
+  hills(g, hillB, 138, 20, 0.05, 4.1);
+  return c;
+}
+
+function circle(g, cx, cy, rad) {
+  for (let y = -rad; y <= rad; y++) {
+    const w = Math.floor(Math.sqrt(rad * rad - y * y));
+    g.fillRect(cx - w, cy + y, w * 2 + 1, 1);
+  }
+}
+function cloud(g, x, y) {
+  g.fillStyle = "#ffffff";
+  circle(g, x, y, 6); circle(g, x + 8, y - 3, 7); circle(g, x + 17, y, 6);
+  g.fillRect(x - 6, y, 30, 6);
+  g.fillStyle = "#dff3fb";
+  g.fillRect(x - 6, y + 5, 30, 2);
+}
+function hills(g, col, base, amp, freq, phase) {
+  g.fillStyle = col;
+  for (let x = 0; x < W; x++) {
+    const h = Math.sin(x * freq + phase) * amp * 0.5 + Math.sin(x * freq * 2.3 + phase) * amp * 0.25;
+    const top = Math.round(base - amp * 0.5 - h);
+    g.fillRect(x, top, 1, H - top);
+  }
+}
+
+// ---------- Desenho das plataformas ----------
+function drawPlatform(p, theme) {
+  const r = rng(p.x * 31 + p.y * 17 + 3);
+  const grass = theme === "day" ? ["#4fc04a", "#3a9a3a"] : ["#9b5fc0", "#6f3f99"];
+  const dirt = theme === "day" ? ["#9a6234", "#7d4b26", "#b37a45"] : ["#5b4a6e", "#463857", "#6e5c83"];
+
+  if (p.ground) {
+    ctx.fillStyle = dirt[0];
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    for (let i = 0; i < p.w * p.h / 10; i++) {
+      ctx.fillStyle = r() < 0.5 ? dirt[1] : dirt[2];
+      ctx.fillRect(p.x + ((r() * p.w) | 0), p.y + 4 + ((r() * (p.h - 4)) | 0), 1, 1);
+    }
+  } else {
+    // bloco flutuante: terra com fundo arredondado
+    ctx.fillStyle = dirt[0];
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = dirt[1];
+    ctx.fillRect(p.x, p.y + p.h - 2, p.w, 2);
+    ctx.fillRect(p.x + 2, p.y + p.h, p.w - 4, 2);
+    ctx.fillRect(p.x + 6, p.y + p.h + 2, p.w - 12, 1);
+    for (let i = 0; i < p.w / 3; i++) {
+      ctx.fillStyle = dirt[2];
+      ctx.fillRect(p.x + ((r() * p.w) | 0), p.y + 4 + ((r() * 3) | 0), 1, 1);
+    }
+  }
+  // grama em cima
+  ctx.fillStyle = grass[0];
+  ctx.fillRect(p.x, p.y, p.w, 3);
+  ctx.fillStyle = grass[1];
+  ctx.fillRect(p.x, p.y + 3, p.w, 1);
+  for (let x = p.x; x < p.x + p.w; x += 2) {
+    if (r() < 0.5) { ctx.fillStyle = grass[1]; ctx.fillRect(x, p.y + 4, 1, 1); }
+    if (r() < 0.35) { ctx.fillStyle = grass[0]; ctx.fillRect(x, p.y - 1, 1, 1); }
+  }
+}
+
+// ---------- Porta ----------
+const DOOR_W = 14, DOOR_H = 20;
+function drawDoor(d, open) {
+  const x = d.x, y = d.y;
+  // moldura de pedra
+  ctx.fillStyle = "#6b6b7a";
+  ctx.fillRect(x - 2, y - 2, DOOR_W + 4, DOOR_H + 2);
+  ctx.fillRect(x, y - 4, DOOR_W, 2);
+  ctx.fillStyle = "#8d8d9e";
+  ctx.fillRect(x - 2, y - 2, 1, DOOR_H + 2);
+  ctx.fillRect(x, y - 4, DOOR_W, 1);
+  // interior (luz lá dentro)
+  ctx.fillStyle = "#1a1226";
+  ctx.fillRect(x, y, DOOR_W, DOOR_H);
+  if (open > 0) {
+    const a = Math.min(1, open * 1.5);
+    ctx.fillStyle = `rgba(255, 230, 140, ${a})`;
+    ctx.fillRect(x + 2, y + 2, DOOR_W - 4, DOOR_H - 2);
+    ctx.fillStyle = `rgba(255, 255, 220, ${a})`;
+    ctx.fillRect(x + 4, y + 4, DOOR_W - 8, DOOR_H - 4);
+  }
+  // folha da porta (encolhe ao abrir, como se girasse na dobradiça)
+  const pw = Math.max(1, Math.round(DOOR_W * (1 - open)));
+  ctx.fillStyle = "#8a4b22";
+  ctx.fillRect(x, y, pw, DOOR_H);
+  ctx.fillStyle = "#a75f2e";
+  for (let i = 2; i < pw - 1; i += 4) ctx.fillRect(x + i, y + 1, 2, DOOR_H - 2);
+  ctx.fillStyle = "#5e3015";
+  ctx.fillRect(x, y + 6, pw, 1);
+  ctx.fillRect(x, y + 14, pw, 1);
+  if (pw > 4) {
+    ctx.fillStyle = "#ffd84a"; // maçaneta
+    ctx.fillRect(x + pw - 3, y + 10, 2, 2);
+  }
+  // setinha piscando em cima da porta
+  if (state === "play" && Math.floor(timer / 30) % 2 === 0) {
+    ctx.fillStyle = "#ffd84a";
+    const ax = x + DOOR_W / 2 - 2, ay = y - 12;
+    ctx.fillRect(ax, ay, 5, 1);
+    ctx.fillRect(ax + 1, ay + 1, 3, 1);
+    ctx.fillRect(ax + 2, ay + 2, 1, 1);
+  }
+}
+
+// ---------- Lógica ----------
+function loadLevel(i) {
+  levelIndex = i;
+  level = LEVELS[i];
+  bgCache = buildBackground(level.theme);
+  resetPlayer();
+  doorOpen = 0;
+  particles = [];
+  hud.textContent = level.name;
+}
+function resetPlayer() {
+  player.x = level.start.x;
+  player.y = level.start.y;
+  player.vx = player.vy = 0;
+  player.face = 1;
+  player.onGround = false;
+}
+
+const GRAVITY = 0.32;
+const JUMP_V = -5.6;
+const MOVE_ACC = 0.45;
+const MAX_VX = 1.7;
+const FRICTION = 0.75;
+
+function update() {
+  timer++;
+
+  if (state === "play") {
+    const left = keys.ArrowLeft || keys.KeyA;
+    const right = keys.ArrowRight || keys.KeyD;
+    const jumpHeld = keys.Space || keys.ArrowUp || keys.KeyW;
+
+    if (left) { player.vx -= MOVE_ACC; player.face = -1; }
+    if (right) { player.vx += MOVE_ACC; player.face = 1; }
+    if (!left && !right) player.vx *= FRICTION;
+    player.vx = Math.max(-MAX_VX, Math.min(MAX_VX, player.vx));
+    if (Math.abs(player.vx) < 0.05) player.vx = 0;
+
+    // pulo com "coyote time" e buffer para ficar gostoso de jogar
+    player.coyote = player.onGround ? 6 : player.coyote - 1;
+    player.buffer = jumpPressed ? 6 : player.buffer - 1;
+    jumpPressed = false;
+    if (player.buffer > 0 && player.coyote > 0) {
+      player.vy = JUMP_V;
+      player.coyote = 0; player.buffer = 0;
+      beep(380, 0.15, "square", 0.06, 300);
+      puff(player.x + 4, player.y + 12, 4);
+    }
+    // soltar o botão cedo = pulo mais baixo
+    if (!jumpHeld && player.vy < -2) player.vy *= 0.6;
+
+    player.vy = Math.min(player.vy + GRAVITY, 6);
+
+    // movimento horizontal
+    player.x += player.vx;
+    player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+    // movimento vertical + colisão (plataformas atravessáveis por baixo)
+    const prevBottom = player.y + player.h;
+    player.y += player.vy;
+    const wasGround = player.onGround;
+    player.onGround = false;
+    for (const p of level.platforms) {
+      const overlapX = player.x + player.w > p.x + 1 && player.x < p.x + p.w - 1;
+      if (overlapX && player.vy >= 0 && prevBottom <= p.y + 0.01 && player.y + player.h >= p.y) {
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      }
+    }
+    if (player.onGround && !wasGround) puff(player.x + 4, player.y + 12, 3);
+
+    // caiu no buraco → volta pro começo
+    if (player.y > H + 20) {
+      beep(200, 0.3, "triangle", 0.1, -150);
+      resetPlayer();
+    }
+
+    // chegou na porta
+    const d = level.door;
+    if (player.x + player.w > d.x + 3 && player.x < d.x + DOOR_W - 3 &&
+        player.y + player.h > d.y && player.y < d.y + DOOR_H && player.onGround) {
+      state = "door";
+      player.vx = 0;
+      beep(520, 0.12, "square", 0.06);
+      setTimeout(() => beep(660, 0.12, "square", 0.06), 120);
+      setTimeout(() => beep(880, 0.25, "square", 0.06), 240);
+    }
+
+    if (player.onGround && player.vx !== 0) player.anim += Math.abs(player.vx) * 0.12;
+    else player.anim = 0;
+  }
+  else if (state === "door") {
+    doorOpen = Math.min(1, doorOpen + 0.04);
+    // boneco caminha pro centro da porta
+    const cx = level.door.x + DOOR_W / 2 - player.w / 2;
+    player.x += (cx - player.x) * 0.15;
+    if (doorOpen >= 1) { state = "fade"; fadeDir = 1; }
+  }
+  else if (state === "fade") {
+    fade += 0.04 * fadeDir;
+    if (fadeDir === 1 && fade >= 1) {
+      fade = 1;
+      if (levelIndex + 1 < LEVELS.length) {
+        loadLevel(levelIndex + 1);
+        fadeDir = -1;
+      } else {
+        state = "end";
+        showEnd();
+      }
+    } else if (fadeDir === -1 && fade <= 0) {
+      fade = 0;
+      state = "play";
+    }
+  }
+
+  // partículas
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--; });
+  particles = particles.filter(p => p.life > 0);
+}
+
+function puff(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    particles.push({ x, y, vx: (Math.random() - 0.5) * 1.2, vy: -Math.random() * 0.6, life: 14 + (Math.random() * 8 | 0) });
+  }
+}
+
+// ---------- Desenho ----------
+function draw() {
+  ctx.drawImage(bgCache, 0, 0);
+
+  for (const p of level.platforms) drawPlatform(p, level.theme);
+  drawDoor(level.door, doorOpen);
+
+  // partículas de poeira
+  ctx.fillStyle = level.theme === "day" ? "#e8e2d0" : "#cdb8e6";
+  particles.forEach(p => ctx.fillRect(p.x | 0, p.y | 0, 1, 1));
+
+  // boneco
+  if (state !== "end") {
+    let spr = SPR.idle;
+    if (!player.onGround && state === "play") spr = SPR.jump;
+    else if (player.vx !== 0) spr = (Math.floor(player.anim) % 2 === 0) ? SPR.walk1 : SPR.walk2;
+
+    const px = Math.round(player.x), py = Math.round(player.y);
+    // sombrinha
+    ctx.fillStyle = "#0003";
+    if (player.onGround) ctx.fillRect(px + 1, py + 12, 6, 1);
+
+    ctx.save();
+    if (state === "door") ctx.globalAlpha = 1 - doorOpen * 0.9;
+    if (player.face < 0) {
+      ctx.translate(px + player.w, py);
+      ctx.scale(-1, 1);
+      ctx.drawImage(spr, 0, 0);
+    } else {
+      ctx.drawImage(spr, px, py);
+    }
+    ctx.restore();
+  }
+
+  if (fade > 0) {
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ---------- Telas ----------
+function showEnd() {
+  msg.innerHTML = `
+    <h1>VOCÊ CONSEGUIU!</h1>
+    <div>Passou pelas 2 fases 🎉</div>
+    <small>Mais fases em breve...</small>
+    <div class="blink">Aperte ESPAÇO ou toque para jogar de novo</div>`;
+  msg.classList.remove("hidden");
+}
+function startGame() {
+  msg.classList.add("hidden");
+  fade = 0; fadeDir = 0;
+  loadLevel(0);
+  state = "play";
+  beep(660, 0.1, "square", 0.05);
+}
+
+// ---------- Entrada ----------
+window.addEventListener("keydown", e => {
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  if (state === "title" || state === "end") {
+    if (e.code === "Space" || e.code === "Enter") startGame();
+    return;
+  }
+  if (!keys[e.code] && (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW")) jumpPressed = true;
+  keys[e.code] = true;
+});
+window.addEventListener("keyup", e => { keys[e.code] = false; });
+window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+
+msg.addEventListener("pointerdown", () => { if (state === "title" || state === "end") startGame(); });
+
+function bindTouch(id, code) {
+  const b = document.getElementById(id);
+  const on = e => {
+    e.preventDefault();
+    if (state === "title" || state === "end") { startGame(); return; }
+    if (code === "Space" && !keys.Space) jumpPressed = true;
+    keys[code] = true; b.classList.add("on");
+  };
+  const off = e => { e.preventDefault(); keys[code] = false; b.classList.remove("on"); };
+  b.addEventListener("pointerdown", on);
+  b.addEventListener("pointerup", off);
+  b.addEventListener("pointercancel", off);
+  b.addEventListener("pointerleave", off);
+}
+bindTouch("bL", "ArrowLeft");
+bindTouch("bR", "ArrowRight");
+bindTouch("bJ", "Space");
+
+// ---------- Loop com passo fixo (60 atualizações/s) ----------
+loadLevel(0);
+let last = performance.now(), acc = 0;
+const STEP = 1000 / 60;
+function frame(now) {
+  acc += Math.min(100, now - last);
+  last = now;
+  while (acc >= STEP) { update(); acc -= STEP; }
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// gancho para testes automatizados
+window.__game = { player, get state() { return state; }, get level() { return levelIndex; } };
+})();
+</script>
+</body>
+</html>
