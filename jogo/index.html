@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#160f26">
+<title>Lá em Cima</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #160f26;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body {
+    display: grid;
+    place-items: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    touch-action: none;
+  }
+  .pad {
+    position: fixed;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    display: none;
+    gap: 14px;
+  }
+  .pad.left { left: max(18px, env(safe-area-inset-left)); }
+  .pad.right { right: max(18px, env(safe-area-inset-right)); }
+  @media (pointer: coarse) { .pad { display: flex; } }
+  .pad button {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    background: rgba(22, 15, 38, 0.55);
+    color: #fff;
+    font: 700 13px/1 ui-monospace, Menlo, Consolas, monospace;
+    touch-action: none;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  .pad button svg { width: 26px; height: 26px; fill: #fff; display: block; margin: auto; }
+  .pad button.on { background: rgba(255, 209, 102, 0.35); border-color: #ffd166; }
+  .pad .jump { width: 84px; height: 84px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="180" aria-label="Jogo de plataforma Lá em Cima. Setas ou A e D para andar, espaço para pular."></canvas>
+
+<div class="pad left" aria-hidden="true">
+  <button data-key="left"><svg viewBox="0 0 24 24"><path d="M15 4 7 12l8 8z"/></svg></button>
+  <button data-key="right"><svg viewBox="0 0 24 24"><path d="m9 4 8 8-8 8z"/></svg></button>
+</div>
+<div class="pad right" aria-hidden="true">
+  <button class="jump" data-key="jump">PULAR</button>
+</div>
+
+<script>
+{
+  // =====================================================================
+  // Configuração
+  // =====================================================================
+  const W = 320, H = 180;
+  const DT = 1 / 60;
+  const PHYS = {
+    grav: 0.32, maxFall: 5.2,
+    jump: 5.4, jumpCut: 0.45,
+    accel: 0.28, airAccel: 0.2, friction: 0.32, maxRun: 1.6,
+    coyote: 6, buffer: 7,
+  };
+
+  const C = {
+    ink: '#1a1226',
+    skyTop: '#1d1535', skyMid: '#4a2858', skyLow: '#c75b5b', horizon: '#f4a261',
+    sun: '#ffd27a', sunCore: '#fff1c9',
+    mtnFar: '#6e3b66', mtnMid: '#4b2850', mtnNear: '#2e1a3d',
+    grass: '#7ee081', grassDark: '#3f9e58',
+    stone: '#4a3a5e', stoneLight: '#6a5585', stoneDark: '#2d2240',
+    hood: '#2ec4b6', hoodDark: '#1d8a84', scarf: '#ffd166', scarfDark: '#e0a63a',
+    skin: '#ffd9b3', legs: '#3d2c5c', boot: '#7a4b33',
+    wood: '#9b6a43', woodDark: '#6e4529', glow: '#ffd27a', glowHot: '#fff4d6',
+    text: '#fff7e8', textDim: '#d8c6e8',
+  };
+
+  // Fases: o chão é sólido; as plataformas dá para atravessar por baixo.
+  const LEVELS = [
+    {
+      name: 'FASE 1', tip: 'TRÊS DEGRAUS ATÉ A PORTA',
+      start: { x: 18, y: 148 },
+      solids: [{ x: 0, y: 160, w: 320, h: 20 }],
+      platforms: [
+        { x: 44, y: 126, w: 56 },
+        { x: 124, y: 92, w: 56 },
+        { x: 204, y: 58, w: 96 },
+      ],
+      door: { x: 272, y: 58 },
+    },
+    {
+      name: 'FASE 2', tip: 'CUIDADO COM O BURACO',
+      start: { x: 14, y: 148 },
+      solids: [{ x: 0, y: 160, w: 110, h: 20 }, { x: 210, y: 160, w: 110, h: 20 }],
+      platforms: [
+        { x: 112, y: 146, w: 36, move: { from: 112, to: 172, speed: 0.55 } },
+        { x: 230, y: 126, w: 50 },
+        { x: 150, y: 92, w: 50 },
+        { x: 70, y: 58, w: 52 },
+      ],
+      door: { x: 84, y: 58 },
+    },
+  ];
+
+  // =====================================================================
+  // Canvas e escala
+  // =====================================================================
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  function fit() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let s = Math.min(vw / W, vh / H);
+    if (s >= 2) s = Math.floor(s);
+    canvas.style.width = Math.round(W * s) + 'px';
+    canvas.style.height = Math.round(H * s) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // =====================================================================
+  // Fonte de pixel 3x5 (desenhada à mão)
+  // =====================================================================
+  const GLYPHS = {
+    A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110',
+    E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101',
+    I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111',
+    M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100',
+    Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
+    U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101',
+    Y: '101101010010010', Z: '111001010100111',
+    0: '111101101101111', 1: '010110010010111', 2: '110001010100111', 3: '110001010001110',
+    4: '101101111001001', 5: '111100110001110', 6: '011100110101010', 7: '111001010010010',
+    8: '010101010101010', 9: '010101011001110',
+    ':': '000010000010000', '.': '000000000000010', '!': '010010010000010', '?': '110001010000010',
+    '-': '000000111000000', '/': '001001010100100', ',': '000000000010100', '<': '001010100010001',
+    '>': '100010001010100', ' ': '000000000000000', "'": '010010000000000',
+  };
+  const ACCENTS = {
+    'Á': ['A', [[2, -2], [1, -1]]], 'À': ['A', [[0, -2], [1, -1]]], 'Â': ['A', [[0, -1], [1, -2], [2, -1]]],
+    'Ã': ['A', [[0, -1], [1, -2], [2, -2]]], 'É': ['E', [[2, -2], [1, -1]]], 'Ê': ['E', [[0, -1], [1, -2], [2, -1]]],
+    'Í': ['I', [[2, -2], [1, -1]]], 'Ó': ['O', [[2, -2], [1, -1]]], 'Ô': ['O', [[0, -1], [1, -2], [2, -1]]],
+    'Õ': ['O', [[0, -1], [1, -2], [2, -2]]], 'Ú': ['U', [[2, -2], [1, -1]]], 'Ç': ['C', [[1, 5], [0, 6]]],
+  };
+
+  function textWidth(str, s = 1) {
+    return str.length * 4 * s - s;
+  }
+  function drawText(str, x, y, { s = 1, color = C.text, align = 'left', shadow = C.ink } = {}) {
+    str = str.toUpperCase();
+    if (align === 'center') x -= Math.floor(textWidth(str, s) / 2);
+    if (align === 'right') x -= textWidth(str, s);
+    x = Math.round(x); y = Math.round(y);
+    const pass = (ox, oy, col) => {
+      ctx.fillStyle = col;
+      for (let i = 0; i < str.length; i++) {
+        let ch = str[i];
+        let marks = null;
+        if (ACCENTS[ch]) [ch, marks] = ACCENTS[ch];
+        const g = GLYPHS[ch] || GLYPHS['?'];
+        const cx = x + i * 4 * s + ox;
+        for (let p = 0; p < 15; p++) {
+          if (g[p] === '1') ctx.fillRect(cx + (p % 3) * s, y + Math.floor(p / 3) * s + oy, s, s);
+        }
+        if (marks) for (const [mx, my] of marks) ctx.fillRect(cx + mx * s, y + my * s + oy, s, s);
+      }
+    };
+    if (shadow) pass(s, s, shadow);
+    pass(0, 0, color);
+  }
+
+  // =====================================================================
+  // Som (sintetizado, sem arquivos)
+  // =====================================================================
+  let audio = null;
+  let muted = false;
+  function sfx(kind) {
+    if (muted) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const t = audio.currentTime;
+      const tone = (type, f0, f1, dur, vol, delay = 0) => {
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, t + delay);
+        o.frequency.exponentialRampToValueAtTime(f1, t + delay + dur);
+        g.gain.setValueAtTime(vol, t + delay);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + delay + dur);
+        o.connect(g).connect(audio.destination);
+        o.start(t + delay);
+        o.stop(t + delay + dur + 0.02);
+      };
+      if (kind === 'jump') tone('square', 260, 620, 0.12, 0.06);
+      if (kind === 'land') tone('triangle', 140, 70, 0.07, 0.08);
+      if (kind === 'door') [392, 494, 587, 784].forEach((f, i) => tone('triangle', f, f, 0.16, 0.07, i * 0.07));
+      if (kind === 'fall') tone('sawtooth', 420, 60, 0.45, 0.05);
+      if (kind === 'start') [523, 659].forEach((f, i) => tone('square', f, f, 0.08, 0.04, i * 0.08));
+    } catch {}
+  }
+
+  // =====================================================================
+  // Cenário pré-desenhado (céu, sol, montanhas)
+  // =====================================================================
+  const bg = document.createElement('canvas');
+  bg.width = W; bg.height = H;
+  {
+    const b = bg.getContext('2d');
+    const g = b.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, C.skyTop);
+    g.addColorStop(0.45, C.skyMid);
+    g.addColorStop(0.78, C.skyLow);
+    g.addColorStop(1, C.horizon);
+    b.fillStyle = g;
+    b.fillRect(0, 0, W, H);
+    // faixas de pôr do sol (dithering simples)
+    for (let y = 100; y < H; y += 6) {
+      b.fillStyle = 'rgba(255,210,122,0.06)';
+      b.fillRect(0, y, W, 2);
+    }
+    // sol
+    const sx = 112, sy = 100;
+    for (let r = 34; r > 0; r--) {
+      b.fillStyle = r > 26 ? 'rgba(255,210,122,0.05)' : r > 22 ? C.sun : C.sunCore;
+      if (r <= 22) {
+        b.beginPath();
+        b.arc(sx, sy, 22, 0, Math.PI * 2);
+        b.fill();
+        break;
+      }
+      b.beginPath();
+      b.arc(sx, sy, r, 0, Math.PI * 2);
+      b.fill();
+    }
+    b.fillStyle = C.sun;
+    for (let y = sy + 4; y < sy + 22; y += 5) b.fillRect(sx - 24, y, 48, 2);
+    // montanhas (silhuetas em degraus de pixel)
+    const ridge = (base, amp, step, seed, color) => {
+      b.fillStyle = color;
+      let h = base;
+      for (let x = 0; x < W; x += step) {
+        h += Math.sin(x * 0.045 + seed) * amp + Math.sin(x * 0.11 + seed * 2) * amp * 0.5;
+        h = Math.max(base - 40, Math.min(base + 10, h));
+        b.fillRect(x, Math.round(h), step, H);
+      }
+    };
+    ridge(112, 2.6, 4, 1.3, C.mtnFar);
+    ridge(132, 2.2, 3, 4.1, C.mtnMid);
+    ridge(150, 1.6, 2, 7.7, C.mtnNear);
+  }
+
+  const stars = Array.from({ length: 34 }, (_, i) => ({
+    x: (i * 97 + 13) % W, y: (i * 53 + 7) % 90, p: (i * 0.7) % 6,
+  }));
+  const clouds = [
+    { x: 30, y: 26, w: 3, v: 0.05 }, { x: 190, y: 44, w: 4, v: 0.035 }, { x: 260, y: 18, w: 2, v: 0.06 },
+  ];
+
+  function drawCloud(x, y, w) {
+    x = Math.round(x); y = Math.round(y);
+    ctx.fillStyle = 'rgba(255,214,190,0.18)';
+    ctx.fillRect(x, y + 2, w * 10, 4);
+    ctx.fillRect(x + 4, y, w * 10 - 10, 3);
+    ctx.fillRect(x + 8, y - 2, w * 5, 3);
+  }
+
+  // =====================================================================
+  // Desenho de peças
+  // =====================================================================
+  function drawSolid(s) {
+    ctx.fillStyle = C.stoneDark;
+    ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.fillStyle = C.stone;
+    for (let y = s.y + 4; y < s.y + s.h; y += 6) {
+      const off = ((y - s.y) / 6) % 2 ? 0 : 6;
+      for (let x = s.x - off; x < s.x + s.w; x += 12) {
+        const x0 = Math.max(s.x, x + 1), x1 = Math.min(s.x + s.w, x + 11);
+        if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 5);
+      }
+    }
+    ctx.fillStyle = C.grassDark;
+    ctx.fillRect(s.x, s.y, s.w, 4);
+    ctx.fillStyle = C.grass;
+    ctx.fillRect(s.x, s.y, s.w, 2);
+    // tufos
+    ctx.fillStyle = C.grass;
+    for (let x = s.x + 3; x < s.x + s.w - 2; x += 9) ctx.fillRect(x, s.y - 1, 1, 1);
+  }
+
+  function drawPlatform(p) {
+    const x = Math.round(p.x), y = p.y;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(x - 1, y - 1, p.w + 2, 9);
+    ctx.fillStyle = C.stoneDark;
+    ctx.fillRect(x, y, p.w, 8);
+    ctx.fillStyle = C.stone;
+    for (let bx = x + 1; bx < x + p.w - 1; bx += 8) ctx.fillRect(bx, y + 4, Math.min(7, x + p.w - 1 - bx), 3);
+    ctx.fillStyle = C.stoneLight;
+    ctx.fillRect(x, y + 3, p.w, 1);
+    ctx.fillStyle = C.grassDark;
+    ctx.fillRect(x, y, p.w, 3);
+    ctx.fillStyle = C.grass;
+    ctx.fillRect(x, y, p.w, 1);
+    // pingos de grama na borda
+    ctx.fillStyle = C.grassDark;
+    ctx.fillRect(x + 2, y + 3, 1, 2);
+    ctx.fillRect(x + p.w - 4, y + 3, 1, 1);
+    if (p.move) {
+      // engrenagem embaixo indica plataforma que anda
+      ctx.fillStyle = C.scarf;
+      ctx.fillRect(x + p.w / 2 - 2, y + 8, 4, 2);
+      ctx.fillStyle = C.ink;
+      ctx.fillRect(x + p.w / 2 - 1, y + 8, 2, 1);
+    }
+  }
+
+  // Porta: x = canto esquerdo, y = chão onde ela está. open: 0..1
+  function drawDoor(d, open, t) {
+    const x = d.x, y = d.y;
+    const w = 16, h = 24;
+    // luz no chão
+    if (open > 0) {
+      ctx.fillStyle = `rgba(255,210,122,${0.25 * open})`;
+      ctx.fillRect(x - 6, y - 2, w + 12, 2);
+    }
+    // batente de pedra com arco
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(x - 2, y - h - 1, w + 4, h + 1);
+    ctx.fillRect(x, y - h - 3, w, 2);
+    ctx.fillStyle = C.stoneLight;
+    ctx.fillRect(x - 1, y - h, w + 2, h);
+    ctx.fillRect(x + 1, y - h - 2, w - 2, 2);
+    // vão
+    const ix = x + 1, iy = y - h + 1, iw = w - 2, ih = h - 1;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(ix, iy, iw, ih);
+    if (open > 0) {
+      // interior iluminado pulsando
+      const pulse = 0.85 + Math.sin(t * 0.12) * 0.15;
+      ctx.fillStyle = C.glow;
+      ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 1);
+      ctx.fillStyle = C.glowHot;
+      ctx.globalAlpha = pulse;
+      ctx.fillRect(ix + 3, iy + 3, iw - 6, ih - 3);
+      ctx.globalAlpha = 1;
+    }
+    // folha da porta girando (fica mais estreita ao abrir)
+    const pw = Math.max(0, Math.round((iw) * (1 - open)));
+    if (pw > 0) {
+      ctx.fillStyle = C.wood;
+      ctx.fillRect(ix, iy, pw, ih);
+      ctx.fillStyle = C.woodDark;
+      for (let px = ix + 3; px < ix + pw; px += 4) ctx.fillRect(px, iy, 1, ih);
+      ctx.fillRect(ix, iy + 5, pw, 1);
+      ctx.fillRect(ix, iy + ih - 6, pw, 1);
+      if (pw > 5) {
+        ctx.fillStyle = C.scarf;
+        ctx.fillRect(ix + pw - 3, iy + 12, 2, 2);
+      }
+    }
+    // pedra-chave
+    ctx.fillStyle = C.scarf;
+    ctx.fillRect(x + w / 2 - 1, y - h - 3, 2, 2);
+  }
+
+  // Personagem desenhado com retângulos de pixel. fx, fy = pés (centro).
+  function drawPlayer(p, t) {
+    if (p.hidden) return;
+    const f = p.face;
+    const fx = Math.round(p.x + p.w / 2), fy = Math.round(p.y + p.h);
+    const parts = [];
+    const R = (x, y, w, h, c) => parts.push([x, y, w, h, c]);
+
+    let legs;
+    if (!p.onGround) legs = p.vy < 0 ? [[-3, -1], [1, -2]] : [[-4, 0], [2, -1]];
+    else if (Math.abs(p.vx) > 0.25) {
+      const fr = Math.floor(p.runT / 5) % 4;
+      legs = [[[-4, 0], [2, 0]], [[-2, -1], [0, 0]], [[2, 0], [-4, 0]], [[0, 0], [-2, -1]]][fr];
+    } else legs = [[-3, 0], [1, 0]];
+
+    const bob = p.onGround && Math.abs(p.vx) < 0.25 && Math.floor(t / 28) % 2 ? 1 : 0;
+    const squash = p.squash > 0 ? 1 : 0;
+    const oy = bob + squash;
+
+    for (const [lx, lift] of legs) {
+      R(lx, -3 + lift, 2, 2, C.legs);
+      R(lx, -1 + lift, 2, 1, C.boot);
+    }
+    // corpo
+    R(-3, -8 + oy, 6, 5, C.hood);
+    R(-3, -8 + oy, 2, 5, C.hoodDark);
+    // cachecol + ponta esvoaçante
+    R(-3, -8 + oy, 7, 1, C.scarf);
+    const wave = Math.floor(t / 6) % 2;
+    const moving = Math.abs(p.vx) > 0.3 || !p.onGround;
+    R(-5, -8 + oy, 2, 1, C.scarf);
+    R(-6, -7 + oy + (moving ? wave : 1), 2, 1, C.scarfDark);
+    // cabeça (capuz)
+    R(-3, -13 + oy, 7, 5, C.hood);
+    R(-4, -12 + oy, 1, 3, C.hoodDark);
+    R(-2, -14 + oy, 4, 1, C.hood);
+    // rosto
+    R(0, -12 + oy, 4, 3, C.skin);
+    const blink = Math.floor(t / 4) % 50 === 0;
+    R(2, -11 + oy, 1, blink ? 0 : 1, C.ink);
+
+    // contorno (cada peça expandida em 1px) e depois o preenchimento
+    const X = (x, w) => (f > 0 ? fx + x : fx - x - w);
+    ctx.fillStyle = C.ink;
+    for (const [x, y, w, h] of parts) if (h > 0) ctx.fillRect(X(x, w) - 1, fy + y - 1, w + 2, h + 2);
+    for (const [x, y, w, h, c] of parts) {
+      if (h <= 0) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(X(x, w), fy + y, w, h);
+    }
+  }
+
+  // =====================================================================
+  // Partículas
+  // =====================================================================
+  let particles = [];
+  function puff(x, y, n, color = 'rgba(255,240,220,0.8)', spread = 1) {
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        x, y,
+        vx: (Math.random() * 2 - 1) * spread,
+        vy: -Math.random() * 0.8,
+        life: 14 + Math.random() * 10,
+        color,
+      });
+    }
+  }
+
+  // =====================================================================
+  // Estado do jogo
+  // =====================================================================
+  const keys = { left: false, right: false, jump: false };
+  let jumpPressed = false; // borda de subida (para buffer)
+
+  const game = {
+    mode: 'title', // title | play | enter | iris-out | iris-in | end
+    level: 0,
+    t: 0,
+    deaths: 0,
+    frames: 0, // tempo de jogo
+    doorOpen: 0,
+    iris: 1,
+    banner: 0,
+    shake: 0,
+  };
+  let L = null;
+  const player = { x: 0, y: 0, w: 8, h: 12, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, runT: 0, squash: 0, hidden: false, enterT: 0 };
+
+  function loadLevel(i) {
+    game.level = i;
+    const src = LEVELS[i];
+    L = {
+      ...src,
+      solids: src.solids.map((s) => ({ ...s })),
+      platforms: src.platforms.map((p) => ({ ...p, dir: 1, prevX: p.x })),
+    };
+    game.doorOpen = 0;
+    game.banner = 150;
+    particles = [];
+    resetPlayer();
+  }
+
+  function resetPlayer() {
+    Object.assign(player, { x: L.start.x, y: L.start.y, vx: 0, vy: 0, face: 1, onGround: false, standOn: null, coyote: 0, buffer: 0, squash: 0, hidden: false, enterT: 0 });
+  }
+
+  function overlaps(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  // =====================================================================
+  // Física (passo fixo de 1/60 s)
+  // =====================================================================
+  function stepPlayer() {
+    const p = player;
+
+    // plataformas que andam (levam o jogador junto)
+    for (const pl of L.platforms) {
+      pl.prevX = pl.x;
+      if (pl.move) {
+        pl.x += pl.dir * pl.move.speed;
+        if (pl.x > pl.move.to) { pl.x = pl.move.to; pl.dir = -1; }
+        if (pl.x < pl.move.from) { pl.x = pl.move.from; pl.dir = 1; }
+      }
+    }
+    if (p.onGround && p.standOn && p.standOn.move) p.x += p.standOn.x - p.standOn.prevX;
+
+    // andar
+    const want = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const acc = p.onGround ? PHYS.accel : PHYS.airAccel;
+    if (want) {
+      p.vx += want * acc;
+      p.vx = Math.max(-PHYS.maxRun, Math.min(PHYS.maxRun, p.vx));
+      p.face = want;
+    } else if (p.onGround) {
+      p.vx = Math.abs(p.vx) <= PHYS.friction ? 0 : p.vx - Math.sign(p.vx) * PHYS.friction;
+    } else {
+      p.vx *= 0.96;
+    }
+
+    // pulo com tolerância (coyote) e memória do botão (buffer)
+    p.coyote = p.onGround ? PHYS.coyote : Math.max(0, p.coyote - 1);
+    if (jumpPressed) p.buffer = PHYS.buffer;
+    else p.buffer = Math.max(0, p.buffer - 1);
+    jumpPressed = false;
+    if (p.buffer > 0 && p.coyote > 0) {
+      p.vy = -PHYS.jump;
+      p.buffer = 0;
+      p.coyote = 0;
+      p.onGround = false;
+      p.standOn = null;
+      puff(p.x + p.w / 2, p.y + p.h, 4);
+      sfx('jump');
+    }
+    if (!keys.jump && p.vy < -1.5) p.vy *= PHYS.jumpCut + (1 - PHYS.jumpCut) * 0.5; // pulo curto se soltar cedo
+
+    // eixo x
+    p.x += p.vx;
+    for (const s of L.solids) {
+      if (overlaps(p, s)) {
+        if (p.vx > 0) p.x = s.x - p.w; else if (p.vx < 0) p.x = s.x + s.w;
+        p.vx = 0;
+      }
+    }
+    p.x = Math.max(0, Math.min(W - p.w, p.x));
+
+    // eixo y
+    const wasGround = p.onGround;
+    const prevBottom = p.y + p.h;
+    p.vy = Math.min(PHYS.maxFall, p.vy + PHYS.grav);
+    p.y += p.vy;
+    p.onGround = false;
+    p.standOn = null;
+    for (const s of L.solids) {
+      if (!overlaps(p, s)) continue;
+      if (p.vy >= 0 && prevBottom <= s.y + 0.5) {
+        p.y = s.y - p.h; p.vy = 0; p.onGround = true;
+      } else if (p.vy < 0) {
+        p.y = s.y + s.h; p.vy = 0;
+      }
+    }
+    for (const pl of L.platforms) {
+      const within = p.x + p.w > pl.x + 1 && p.x < pl.x + pl.w - 1;
+      if (within && p.vy >= 0 && prevBottom <= pl.y + 0.5 && p.y + p.h >= pl.y) {
+        p.y = pl.y - p.h; p.vy = 0; p.onGround = true; p.standOn = pl;
+      }
+    }
+    if (p.onGround && !wasGround && prevBottom > 0) {
+      p.squash = 6;
+      puff(p.x + p.w / 2, p.y + p.h, 5, 'rgba(255,240,220,0.75)', 1.2);
+      sfx('land');
+    }
+    p.squash = Math.max(0, p.squash - 1);
+    p.runT = p.onGround && Math.abs(p.vx) > 0.25 ? p.runT + 1 : 0;
+
+    // caiu no buraco
+    if (p.y > H + 24) {
+      game.deaths++;
+      game.shake = 10;
+      sfx('fall');
+      resetPlayer();
+      puff(p.x + p.w / 2, p.y + p.h, 10, 'rgba(126,224,129,0.9)', 1.6);
+    }
+
+    // porta: abre quando o jogador chega perto, entra quando está na frente
+    const d = L.door;
+    const cx = p.x + p.w / 2;
+    const near = Math.abs(cx - (d.x + 8)) < 52 && Math.abs(p.y + p.h - d.y) < 4;
+    if (near && game.doorOpen === 0) sfx('door');
+    if (near || game.doorOpen > 0) game.doorOpen = Math.min(1, game.doorOpen + 1 / 16);
+    if (game.doorOpen >= 0.7 && p.onGround && Math.abs(cx - (d.x + 8)) < 6 && Math.abs(p.y + p.h - d.y) < 1) {
+      game.mode = 'enter';
+      p.enterT = 0;
+      p.vx = 0;
+    }
+  }
+
+  function step() {
+    game.t++;
+    for (const c of clouds) {
+      c.x += c.v;
+      if (c.x > W + 10) c.x = -c.w * 10 - 10;
+    }
+    particles = particles.filter((q) => {
+      q.x += q.vx; q.y += q.vy; q.vy += 0.03; q.life--;
+      return q.life > 0;
+    });
+    if (game.shake > 0) game.shake--;
+    if (game.banner > 0) game.banner--;
+
+    if (game.mode === 'title' || game.mode === 'end') {
+      if (jumpPressed) {
+        jumpPressed = false;
+        sfx('start');
+        game.deaths = 0;
+        game.frames = 0;
+        loadLevel(0);
+        game.mode = 'iris-in';
+        game.iris = 0;
+      }
+      return;
+    }
+    if (game.mode === 'play') {
+      game.frames++;
+      stepPlayer();
+      if (game.doorOpen > 0 && game.t % 4 === 0) {
+        L.door && particles.push({ x: L.door.x + 3 + Math.random() * 10, y: L.door.y - 4 - Math.random() * 18, vx: 0, vy: -0.25, life: 30, color: 'rgba(255,241,201,0.9)' });
+      }
+      return;
+    }
+    if (game.mode === 'enter') {
+      const p = player;
+      p.enterT++;
+      p.x += (L.door.x + 8 - p.w / 2 - p.x) * 0.2;
+      if (p.enterT > 18) p.hidden = true;
+      if (p.enterT > 26) { game.mode = 'iris-out'; game.iris = 1; }
+      return;
+    }
+    if (game.mode === 'iris-out') {
+      game.iris = Math.max(0, game.iris - 1 / 32);
+      if (game.iris === 0) {
+        if (game.level + 1 < LEVELS.length) {
+          loadLevel(game.level + 1);
+          game.mode = 'iris-in';
+        } else {
+          game.mode = 'end';
+          game.iris = 1;
+        }
+      }
+      return;
+    }
+    if (game.mode === 'iris-in') {
+      game.iris = Math.min(1, game.iris + 1 / 28);
+      if (game.iris === 1) game.mode = 'play';
+      jumpPressed = false;
+    }
+  }
+
+  // =====================================================================
+  // Render
+  // =====================================================================
+  function render() {
+    const t = game.t;
+    ctx.save();
+    if (game.shake) ctx.translate(Math.round((Math.random() * 2 - 1) * 2), Math.round((Math.random() * 2 - 1) * 2));
+    ctx.drawImage(bg, 0, 0);
+    for (const s of stars) {
+      const on = Math.sin(t * 0.05 + s.p) > -0.3;
+      ctx.fillStyle = on ? 'rgba(255,241,220,0.9)' : 'rgba(255,241,220,0.35)';
+      ctx.fillRect(s.x, s.y, 1, 1);
+    }
+    for (const c of clouds) drawCloud(c.x, c.y, c.w);
+
+    const level = L || (loadLevel(0), L);
+    for (const s of level.solids) drawSolid(s);
+    for (const pl of level.platforms) drawPlatform(pl);
+    drawDoor(level.door, game.doorOpen, t);
+    for (const q of particles) {
+      ctx.fillStyle = q.color;
+      ctx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
+    }
+    if (game.mode !== 'title') drawPlayer(player, t);
+    ctx.restore();
+
+    // HUD
+    if (game.mode === 'play' || game.mode === 'enter' || game.mode === 'iris-in') {
+      drawText(level.name, 6, 6);
+      drawText(`QUEDAS ${game.deaths}`, W - 6, 6, { align: 'right' });
+      if (game.banner > 0) {
+        const a = Math.min(1, game.banner / 30);
+        ctx.globalAlpha = a;
+        drawText(level.name, W / 2, 20, { s: 3, align: 'center' });
+        drawText(level.tip, W / 2, 41, { align: 'center', color: C.scarf });
+        if (game.level === 0) drawText('< > ANDAR    ESPAÇO PULAR', W / 2, 52, { align: 'center', color: C.textDim });
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // transição em íris
+    if (game.mode === 'iris-out' || game.mode === 'iris-in') {
+      const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+      const r = Math.max(0, game.iris) * 380;
+      ctx.fillStyle = C.ink;
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+      ctx.fill();
+    }
+
+    if (game.mode === 'title') {
+      ctx.fillStyle = 'rgba(26,18,38,0.72)';
+      ctx.fillRect(0, 0, W, H);
+      drawText('LÁ EM CIMA', W / 2, 46, { s: 4, align: 'center' });
+      drawText('UM PEQUENO JOGO DE PULAR', W / 2, 74, { align: 'center', color: C.scarf });
+      // personagem grande no título
+      ctx.save();
+      ctx.translate(W / 2, 124);
+      ctx.scale(3, 3);
+      const fake = { ...player, x: -4, y: -12, onGround: true, vx: 0, vy: 0, face: 1, hidden: false, squash: 0 };
+      drawPlayer(fake, t);
+      ctx.restore();
+      if (Math.floor(t / 30) % 2 === 0) drawText('APERTE ESPAÇO OU TOQUE PARA COMEÇAR', W / 2, 146, { align: 'center' });
+      drawText('M LIGA/DESLIGA O SOM', W / 2, 164, { align: 'center', color: C.textDim });
+    }
+
+    if (game.mode === 'end') {
+      ctx.fillStyle = 'rgba(26,18,38,0.82)';
+      ctx.fillRect(0, 0, W, H);
+      drawText('VOCÊ CHEGOU', W / 2, 40, { s: 3, align: 'center' });
+      drawText('LÁ EM CIMA!', W / 2, 62, { s: 3, align: 'center', color: C.scarf });
+      const secs = Math.floor(game.frames / 60);
+      drawText(`TEMPO ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, W / 2, 98, { align: 'center' });
+      drawText(`QUEDAS ${game.deaths}`, W / 2, 108, { align: 'center' });
+      drawText('MAIS FASES EM BREVE', W / 2, 126, { align: 'center', color: C.textDim });
+      if (Math.floor(t / 30) % 2 === 0) drawText('ESPAÇO OU TOQUE PARA JOGAR DE NOVO', W / 2, 150, { align: 'center' });
+    }
+  }
+
+  // =====================================================================
+  // Entrada
+  // =====================================================================
+  const KEYMAP = {
+    ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+    Space: 'jump', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump', Enter: 'jump',
+  };
+  function setKey(k, down) {
+    if (k === 'jump' && down && !keys.jump) jumpPressed = true;
+    keys[k] = down;
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM') { muted = !muted; return; }
+    const k = KEYMAP[e.code];
+    if (!k) return;
+    e.preventDefault();
+    if (!e.repeat) setKey(k, true);
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = KEYMAP[e.code];
+    if (k) setKey(k, false);
+  });
+  window.addEventListener('blur', () => { keys.left = keys.right = keys.jump = false; });
+
+  // botões de toque (vários dedos ao mesmo tempo)
+  document.querySelectorAll('.pad button').forEach((b) => {
+    const k = b.dataset.key;
+    const on = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch {} b.classList.add('on'); setKey(k, true); };
+    const off = (e) => { e.preventDefault(); b.classList.remove('on'); setKey(k, false); };
+    b.addEventListener('pointerdown', on);
+    b.addEventListener('pointerup', off);
+    b.addEventListener('pointercancel', off);
+    b.addEventListener('lostpointercapture', off);
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  });
+  // tocar na tela começa o jogo
+  canvas.addEventListener('pointerdown', () => {
+    if (game.mode === 'title' || game.mode === 'end') jumpPressed = true;
+  });
+
+  // =====================================================================
+  // Laço principal com passo fixo
+  // =====================================================================
+  let last = performance.now();
+  let acc = 0;
+  let paused = false;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (paused) { last = now; return; }
+    acc += Math.min(0.1, (now - last) / 1000);
+    last = now;
+    while (acc >= DT) { step(); acc -= DT; }
+    render();
+  }
+  loadLevel(0);
+  requestAnimationFrame(frame);
+
+  // Gancho para testes automatizados (avança quadros de forma determinística).
+  window.jogo = {
+    pause() { paused = true; },
+    resume() { paused = false; },
+    key(k, down) { setKey(k, down); },
+    step(n = 1) { for (let i = 0; i < n; i++) step(); render(); },
+    teleport(x, y) { Object.assign(player, { x, y, vx: 0, vy: 0, onGround: false, standOn: null }); },
+    state() {
+      return {
+        mode: game.mode, level: game.level, deaths: game.deaths, doorOpen: game.doorOpen,
+        x: player.x, y: player.y, onGround: player.onGround,
+        standOn: player.standOn ? L.platforms.indexOf(player.standOn) : (player.onGround ? 'chão' : null),
+        platforms: L.platforms.map((p) => ({ x: p.x, y: p.y, w: p.w })),
+        door: L.door,
+      };
+    },
+  };
+}
+</script>
+</body>
+</html>
