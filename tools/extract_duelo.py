@@ -150,7 +150,13 @@ def rects():
             else:
                 cols = even_split(images[src], x0, x1, y0, y1, n)
             R[who][name] = (src, [(a, b, y0, y1) for a, b in cols])
+        # só o efeito de cada golpe, para o rastro que se desfaz no jogo
+        for name in FX_ANIMS[who]:
+            R[who][name + "_fx"] = R[who][name]
     return R, images
+
+
+FX_ANIMS = {"hero": ["basic", "combo", "power"], "zombie": ["attack", "combo"]}
 
 
 EXPECT = {
@@ -161,17 +167,79 @@ EXPECT = {
 STANDING = {"hero": ("idle", 0), "zombie": ("idle", 0)}
 
 
-def body_anchor(crop):
-    """Centro do corpo (pixels escuros = roupa) e linha dos pés."""
+def _dilate(m, r=1):
+    out = m.copy()
+    for _ in range(r):
+        acc = out.copy()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            acc |= np.roll(np.roll(out, dy, 0), dx, 1)
+        out = acc
+    return out
+
+
+def _components(mask):
+    """Rótulos de componentes conectados (4 vizinhos)."""
+    lab = np.zeros(mask.shape, int)
+    n = 0
+    h, w = mask.shape
+    for y, x in zip(*np.nonzero(mask)):
+        if lab[y, x]:
+            continue
+        n += 1
+        lab[y, x] = n
+        q = deque([(y, x)])
+        while q:
+            cy, cx = q.popleft()
+            for ny, nx in ((cy + 1, cx), (cy - 1, cx), (cy, cx + 1), (cy, cx - 1)):
+                if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not lab[ny, nx]:
+                    lab[ny, nx] = n
+                    q.append((ny, nx))
+    return lab, n
+
+
+def body_mask(crop):
+    """O corpo é o maior bloco de pixels escuros (roupa). Efeitos e poeira são claros ou soltos."""
     mx = crop.max(axis=2)
-    opaque = mx > 30
-    dark = opaque & (mx < 125)
-    ys, xs = np.nonzero(dark if dark.sum() > 40 else opaque)
-    cx = float(np.median(xs))
-    oy, ox = np.nonzero(opaque)
-    near = np.abs(ox - cx) < crop.shape[1] * 0.18 + 12
-    feet = float(oy[near].max() + 1)
-    return cx, feet
+    dark = (mx > 30) & (mx < 120)
+    lab, n = _components(_dilate(dark, 2))
+    if n == 0:
+        return mx > 30
+    sizes = np.bincount(lab.ravel())[1:]
+    return (lab == 1 + int(np.argmax(sizes))) & dark
+
+
+def body_anchor(crop):
+    """Centro do tronco e linha dos pés, medidos só no corpo (não na poeira nem nos cortes)."""
+    body = body_mask(crop)
+    ys, xs = np.nonzero(body)
+    top, bot = ys.min(), ys.max()
+    band = (ys > top + (bot - top) * 0.25) & (ys < top + (bot - top) * 0.6)
+    cx = float(xs[band].mean()) if band.any() else float(xs.mean())
+    # pés: pixels opacos ligados ao corpo, nas colunas do corpo (as botas são claras)
+    op = crop.max(axis=2) > 30
+    near = _dilate(body, 4)
+    feet = op & near
+    fy = np.nonzero(feet.any(axis=1))[0]
+    return cx, float(fy.max() + 1)
+
+
+def fx_only(crop):
+    """Só o efeito do golpe: pixels claros longe do corpo e da cabeça."""
+    body = body_mask(crop)
+    ys, xs = np.nonzero(body)
+    top, bot = ys.min(), ys.max()
+    hgt = bot - top
+    region = _dilate(body, 5)
+    # cabeça/cabelo: acima do corpo, na largura do tronco
+    head = np.zeros_like(region)
+    head[max(0, int(top - hgt * 0.45)):int(top + hgt * 0.2), max(0, xs.min() - 6):xs.max() + 7] = True
+    mx = crop.max(axis=2)
+    bright = crop.min(axis=2) > 120
+    fx = (mx > 30) & bright & ~(region | head)
+    fx = _dilate(fx, 1) & (mx > 30) & ~region
+    out = crop.copy()
+    out[~fx] = 0
+    return out
 
 
 def kmeans(pixels, k, iters=25, seed=5):
@@ -200,6 +268,8 @@ def build(who, anims, images, standing):
         for (x0, x1, y0, y1) in boxes:
             crop = rgb[y0:y1, x0:x1]
             ax, ay = body_anchor(crop)
+            if name.endswith("_fx"):
+                crop = fx_only(crop)
             alpha = np.clip((crop.max(axis=2) - 22) / 26, 0, 1)
             rgba = np.dstack([crop * alpha[..., None], alpha * 255]).astype(np.uint8)
             tw, th = max(1, round((x1 - x0) * s)), max(1, round((y1 - y0) * s))
@@ -207,7 +277,7 @@ def build(who, anims, images, standing):
             al = a[..., 3:4] / 255
             col = np.clip(np.where(al > 0, a[..., :3] / np.maximum(al, 1e-6), 0), 0, 255)
             small[name].append((col, a[..., 3] > 105, ax * tw / (x1 - x0), ay * th / (y1 - y0)))
-    allpx = np.concatenate([c[m] for fr in small.values() for c, m, _, _ in fr])
+    allpx = np.concatenate([c[m] for k, fr in small.items() if not k.endswith("_fx") for c, m, _, _ in fr])
     pal = kmeans(allpx, 10)
     pal = pal[np.argsort(pal.sum(1))]
     outline = (10, 8, 18, 255)
@@ -268,7 +338,7 @@ def build(who, anims, images, standing):
 def main():
     R, images = rects()
     for who, exp in EXPECT.items():
-        got = {k: len(v[1]) for k, v in R[who].items()}
+        got = {k: len(v[1]) for k, v in R[who].items() if not k.endswith("_fx")}
         assert got == exp, (who, got)
     sprites = {
         "hero": build("heroi", R["hero"], images, STANDING["hero"]),

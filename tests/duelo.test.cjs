@@ -103,6 +103,21 @@ const HELPERS = () => {
   check(s.sounds.filter((x) => x === "hit").length === 5, "cada acerto tem som de impacto");
   s = await E(() => { const D = window.duelo; T.fresh(30); D.tap("attack"); D.step(60); return D.state(); });
   check(s.hero.state === "move" && s.hero.step === 0, "sem apertar de novo, o combo para no 1º golpe");
+  s = await E(() => {
+    const D = window.duelo;
+    T.fresh(30);
+    D.tap("attack");
+    let maxTrails = 0, endTrails = null;
+    for (let i = 0; i < 80; i++) {
+      if (D.state().hero.state === "attack" && i % 5 === 0) D.tap("attack"); else D.step(1);
+      const st = D.state();
+      maxTrails = Math.max(maxTrails, st.trails);
+      if (endTrails === null && st.hero.state === "move") endTrails = st.trails;
+    }
+    return { maxTrails, endTrails, later: D.state().trails };
+  });
+  check(s.maxTrails > 0 && s.endTrails > 0, `os cortes deixam um rastro que continua depois do golpe (${s.endTrails} no fim do combo)`);
+  check(s.later === 0, "e o rastro some sozinho");
 
   // ---------- defesa: parry, bloqueio e sem defesa ----------
   s = await E(() => {
@@ -115,7 +130,7 @@ const HELPERS = () => {
     return { at, sounds: D.sounds() };
   });
   check(s.at.hero.hp === s.at.hero.maxHp && s.sounds.includes("parry"), "parry no ataque lento: sem dano e com som próprio");
-  check(s.at.hero.parryT > 0, "parry acende o flash amarelo na defesa");
+  check(s.at.hero.parryT > 0 && s.at.hero.anim === "guard" && s.at.hero.f === 2, "parry: fica na pose de defesa e brilha amarelo");
   check(s.at.zombie.posture < 100 && s.at.zombie.barAlpha === 1, `parry faz aparecer a barra vermelha diminuindo (${s.at.zombie.posture})`);
   check(s.at.hero.power === 12, `parry carrega o poder (${s.at.hero.power})`);
   check(s.at.hitstop > 0, "parry dá uma pausa curta de impacto");
@@ -205,18 +220,39 @@ const HELPERS = () => {
   s = await E(() => { const D = window.duelo; T.fresh(30); D.set({ hero: { power: 100 } }); D.tap("power"); D.step(16); return D.state(); });
   await page.screenshot({ path: path.join(OUT, "duelo-5-poder.png") });
 
-  // ---------- ondas e derrota ----------
+  // ---------- zumbis entrando aos poucos ----------
   s = await E(() => {
     const D = window.duelo;
     T.fresh(30);
     D.set({ zombie: { hp: 5 } });
     D.tap("attack"); D.step(20);
     const dead = D.state().zombie.state;
-    D.step(130);
-    return { dead, after: D.state() };
+    let back = -1;
+    for (let i = 0; i < 300; i++) { D.step(1); const z = D.state().zombies.filter((q) => q.state !== "dead"); if (z.length) { back = i; break; } }
+    return { dead, back, st: D.state() };
   });
-  check(s.dead === "dead" && s.after.wave === 2 && s.after.zombies.length === 2 && s.after.zombie.hp === 114 && s.after.kills === 1, "derrotar o zumbi chama a onda 2: dois zumbis, mais fortes");
-  check(s.after.zombies.every((z) => z.state === "spawn" || z.state === "idle" || z.state === "walk" || z.state === "run"), "os zumbis da onda nova surgem do chão");
+  check(s.dead === "dead" && s.back > 0 && s.back < 200, `derrotou um, outro surge do chão logo depois (${s.back} quadros)`);
+  check(s.st.zombies.filter((z) => z.state !== "dead").length === 1 && s.st.maxAlive === 1, "no começo é um zumbi por vez");
+  s = await E(() => {
+    const D = window.duelo;
+    D.start(); D.ai(false); D.kills(8);
+    const counts = [];
+    let together = 0;
+    for (let i = 0; i < 700; i++) {
+      D.step(1);
+      const zs = D.state().zombies;
+      const living = zs.filter((z) => z.state !== "dead").length;
+      if (counts[counts.length - 1] !== living) counts.push(living);
+      together = Math.max(together, zs.filter((z) => z.state === "spawn").length);
+    }
+    return { counts, together, max: D.state().maxAlive };
+  });
+  check(s.counts.join(",") === "1,2,3" && s.max === 3, `com mais abates, vão chegando um de cada vez até 3 (${s.counts.join(" → ")})`);
+  check(s.together <= 1, "nunca surgem dois do chão ao mesmo tempo");
+  s = await E(() => { const D = window.duelo; D.start(); D.ai(false); D.kills(4); D.step(2); return D.state(); });
+  check(s.wave === 2 && s.maxAlive === 2, `a cada 4 abates a onda sobe (onda ${s.wave}, até ${s.maxAlive} zumbis)`);
+
+  // ---------- derrota ----------
   s = await E(() => { const D = window.duelo; T.fresh(30); D.set({ hero: { hp: 5 } }); D.zombieAttack("slow"); D.step(T.slowHitIn + 90); return D.state(); });
   check(s.mode === "over", "vida zerada: fim de jogo");
   await page.screenshot({ path: path.join(OUT, "duelo-6-fim.png") });
@@ -260,9 +296,10 @@ const HELPERS = () => {
   // ---------- vários zumbis ----------
   s = await E(() => {
     const D = window.duelo;
-    D.start(); D.ai(true); D.wave(4); D.clearSounds();
-    const n = D.state().zombies.length;
-    const spawning = D.state().zombies.every((z) => z.state === "spawn");
+    D.start(); D.ai(true); D.kills(8); D.clearSounds();
+    D.step(400);
+    const n = D.state().zombies.filter((z) => z.state !== "dead").length;
+    const spawning = true;
     let maxAtk = 0;
     for (let i = 0; i < 2500; i++) {
       D.set({ hero: { hp: 120, inv: 0 } });
@@ -272,9 +309,9 @@ const HELPERS = () => {
     }
     return { n, spawning, maxAtk };
   });
-  check(s.n === 3 && s.spawning, "onda 4: três zumbis surgindo do chão");
+  check(s.n === 3, "com 8 abates: três zumbis na arena");
   check(s.maxAtk >= 2 && s.maxAtk <= 2, `no máximo dois atacam ao mesmo tempo (máximo visto: ${s.maxAtk})`);
-  await E(() => { const D = window.duelo; D.start(); D.ai(true); D.wave(4); D.step(160); });
+  await E(() => { const D = window.duelo; D.start(); D.ai(true); D.kills(8); D.step(420); });
   await page.screenshot({ path: path.join(OUT, "duelo-8-tres-zumbis.png") });
 
   // cena de combate para olhar
