@@ -24,3 +24,11 @@ Sempre que for criado ou alterado um site neste repositório:
 - Encostar num fantasma ou cair recomeça a fase inteira e conta uma queda.
 - Editor de fases embutido (botão "Editor de fases" ou tecla E no título): cria fases no mesmo formato de `LEVELS`, salva no `localStorage` (`laemcima-editor-v1`), testa na hora e exporta/importa em JSON. Fases do editor sem `wires` ganham fios automáticos (`autoWires`). Para colocar uma fase criada pelo usuário no jogo oficial, cole o JSON exportado na lista `LEVELS` e adicione os passos dela ao teste.
 - Testar: `node tests/jogo.test.cjs [pasta-de-screenshots]`. O teste pausa o jogo e avança quadro a quadro com `window.jogo` (desliga os fantasmas nos testes de caminho), prova que cada pulo é possível, que os atalhos não funcionam, e atravessa as fases até o fim. Ao criar ou mudar uma fase, adicione os passos dela ao teste.
+
+## Meia-Noite (jogo de luta contra zumbis)
+
+- Um arquivo só: `duelo/index.html` (canvas 384×216, sem dependências). Cenário de cemitério, fonte e sons feitos no código.
+- Sprites: `duelo/sprites/heroi-movimento-original.png`, `heroi-ataques-original.png` e `zumbi-original.png`. `python3 tools/extract_duelo.py` recorta cada animação (retângulos na função `rects`; quadros grudados pelos efeitos são cortados no ponto mais vazio entre os centros dados), alinha pelo corpo escuro e pelos pés, embute no HTML entre `/*SPRITE-START*/` e `/*SPRITE-END*/` e grava `*-preview.png` com a âncora marcada.
+- Combate: combo de 4 golpes (`HERO_STEPS`), defesa segurando K e parry se apertar até `PARRY_WINDOW` quadros antes do golpe (flash amarelo na defesa, som `parry`, pausa curta). Parry abaixa a postura do zumbi (barra vermelha, só aparece depois do 1º parry); postura zerada = atordoado (dano ×1,6). A vida do zumbi não aparece; acerto dá flash branco fraco. Poder carrega acertando, bloqueando e com parry; cheio, L solta os "Cortes Avançados".
+- Zumbi: ataque lento (`ZOMBIE_SLOW`) e sequência de 4 golpes rápidos (`ZOMBIE_COMBO`), com aviso vermelho no olho; às vezes defende; não é interrompido no meio de um ataque. Ondas ficam mais fortes.
+- Testar: `node tests/duelo.test.cjs [pasta-de-screenshots]`. Usa `window.duelo` (pausa, avança quadros, `ai(false)`, `zombieAttack()`, `state().zombie.nextHit` para acertar o parry no quadro certo).
