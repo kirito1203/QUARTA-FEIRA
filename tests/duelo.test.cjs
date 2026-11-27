@@ -23,14 +23,14 @@ const HELPERS = () => {
     // arena limpa: zumbi parado (sem IA) a `dist` pixels à direita do herói
     fresh(dist = 34) { D.start(); D.ai(false); D.place(150, 150 + dist); D.step(1); D.clearSounds(); },
     // quadros até o golpe do zumbi sair (lento: 1º golpe; sequência: lista dos 4)
-    slowHitIn: 28 + 16,
+    slowHitIn: 8 + 8 + 9 + 8,
     comboHitsIn: [16, 16 + 7 + 6, 16 + 7 + 6 + 7 + 6 + 6, 16 + 7 + 6 + 7 + 6 + 6 + 7 + 6],
     // aperta a defesa (fresca: solta e aperta de novo) `early` quadros antes de cada golpe do zumbi
     guardEach(early, maxFrames = 400) {
       let pressedFor = null;
       for (let i = 0; i < maxFrames; i++) {
         const z = D.state().zombie;
-        if (!["attack", "combo", "windup"].includes(z.state)) break;
+        if (!["attack", "combo", "leap"].includes(z.state)) break;
         if (z.nextHit === early && pressedFor !== z.f + ":" + z.state) {
           pressedFor = z.f + ":" + z.state;
           D.key("guard", false); D.step(1); D.key("guard", true);
@@ -97,10 +97,10 @@ const HELPERS = () => {
     }
     return { hits, maxStep, flashSeen, sounds: D.sounds() };
   });
-  check(s.maxStep === 3 && s.hits.length === 4, `combo de 4 golpes encadeados (${s.hits.join(" + ")})`);
-  check(s.hits[3] > s.hits[0], "o último golpe do combo é o mais forte");
+  check(s.maxStep === 3 && s.hits.length === 5, `combo de 4 golpes encadeados, o último acerta 2 vezes (${s.hits.join(" + ")})`);
+  check(s.hits[4] > s.hits[0], "o golpe final é o mais forte");
   check(s.flashSeen > 0 && s.flashSeen <= 4, "acerto dá um flash curto no zumbi");
-  check(s.sounds.filter((x) => x === "hit").length === 4, "cada acerto tem som de impacto");
+  check(s.sounds.filter((x) => x === "hit").length === 5, "cada acerto tem som de impacto");
   s = await E(() => { const D = window.duelo; T.fresh(30); D.tap("attack"); D.step(60); return D.state(); });
   check(s.hero.state === "move" && s.hero.step === 0, "sem apertar de novo, o combo para no 1º golpe");
 
@@ -114,7 +114,7 @@ const HELPERS = () => {
     D.key("guard", false);
     return { at, sounds: D.sounds() };
   });
-  check(s.at.hero.hp === 100 && s.sounds.includes("parry"), "parry no ataque lento: sem dano e com som próprio");
+  check(s.at.hero.hp === s.at.hero.maxHp && s.sounds.includes("parry"), "parry no ataque lento: sem dano e com som próprio");
   check(s.at.hero.parryT > 0, "parry acende o flash amarelo na defesa");
   check(s.at.zombie.posture < 100 && s.at.zombie.barAlpha === 1, `parry faz aparecer a barra vermelha diminuindo (${s.at.zombie.posture})`);
   check(s.at.hero.power === 12, `parry carrega o poder (${s.at.hero.power})`);
@@ -130,11 +130,11 @@ const HELPERS = () => {
     D.key("guard", false);
     return { st: D.state(), sounds: D.sounds() };
   });
-  check(s.st.hero.hp > 90 && s.st.hero.hp < 100 && s.sounds.includes("block") && !s.sounds.includes("parry"), `defender cedo demais só bloqueia: pouco dano (vida ${s.st.hero.hp})`);
+  check(s.st.hero.hp > 110 && s.st.hero.hp < 120 && s.sounds.includes("block") && !s.sounds.includes("parry"), `defender cedo demais só bloqueia: pouco dano (vida ${s.st.hero.hp})`);
   check(s.st.zombie.posture === 100, "bloqueio não mexe na barra vermelha");
 
   s = await E(() => { const D = window.duelo; T.fresh(30); D.zombieAttack("slow"); D.step(T.slowHitIn + 3); return D.state(); });
-  check(s.hero.hp === 84 && s.hero.state === "hurt", `sem defesa, o ataque lento tira 16 de vida (${s.hero.hp})`);
+  check(s.hero.hp === 106 && s.hero.state === "hurt", `sem defesa, o ataque lento tira 14 de vida (${s.hero.hp})`);
 
   // ---------- sequência de 4 golpes rápidos ----------
   s = await E(() => {
@@ -144,10 +144,10 @@ const HELPERS = () => {
     T.guardEach(4);
     return { st: D.state(), sounds: D.sounds() };
   });
-  check(s.sounds.filter((x) => x === "parry").length === 4 && s.st.hero.hp === 100, "dá para dar parry nos 4 golpes da sequência rápida");
-  check(s.st.zombie.posture === 100 - (16 * 3 + 22), `cada parry da sequência abaixa a barra (${s.st.zombie.posture})`);
-  s = await E(() => { const D = window.duelo; T.fresh(30); D.zombieAttack("combo"); D.step(T.comboHitsIn[3] + 60); return D.state(); });
-  check(s.hero.hp < 100, `sem defesa, a sequência acerta (vida ${s.hero.hp})`);
+  check(s.sounds.filter((x) => x === "parry").length === 4 && s.st.hero.hp === 120, "dá para dar parry nos 4 golpes da sequência rápida");
+  check(s.st.zombie.posture === 100 - (15 + 15 + 16 + 22), `cada parry da sequência abaixa a barra (${s.st.zombie.posture})`);
+  s = await E(() => { const D = window.duelo; T.fresh(30); D.zombieAttack("combo"); D.step(120); return D.state(); });
+  check(s.hero.hp < 120, `sem defesa, a sequência acerta (vida ${s.hero.hp})`);
 
   // ---------- postura zera → atordoado ----------
   s = await E(() => {
@@ -169,7 +169,7 @@ const HELPERS = () => {
     D.tap("attack"); D.step(14);
     return { dmg: hp0 - D.state().zombie.hp };
   });
-  check(Math.abs(s.dmg - 9 * 1.6) < 0.01, `atordoado leva mais dano (${s.dmg.toFixed(1)} em vez de 9)`);
+  check(Math.abs(s.dmg - 8 * 1.6) < 0.01, `atordoado leva mais dano (${s.dmg.toFixed(1)} em vez de 8)`);
   s = await E(() => { window.duelo.step(170); return window.duelo.state(); });
   check(s.zombie.state !== "stun" && s.zombie.posture === 100, "depois de um tempo ele se recupera e a postura volta cheia");
 
@@ -184,7 +184,7 @@ const HELPERS = () => {
     T.guardEach(5);
     return { afterCombo, afterParry: D.state().hero.power };
   });
-  check(s.afterCombo === 28 && s.afterParry === 40, `poder carrega atacando (${s.afterCombo}) e com parry (${s.afterParry})`);
+  check(s.afterCombo === 35 && s.afterParry === 47, `poder carrega atacando (${s.afterCombo}) e com parry (${s.afterParry})`);
   s = await E(() => { const D = window.duelo; T.fresh(30); D.set({ hero: { power: 60 } }); D.tap("power"); D.step(2); return D.state(); });
   check(s.hero.state !== "power" && s.hero.power === 60, "poder incompleto não sai");
   s = await E(() => {
@@ -215,12 +215,13 @@ const HELPERS = () => {
     D.step(130);
     return { dead, after: D.state() };
   });
-  check(s.dead === "dead" && s.after.wave === 2 && s.after.zombie.hp === 150 && s.after.kills === 1, "derrotar o zumbi chama a onda 2, com um zumbi mais forte");
-  s = await E(() => { const D = window.duelo; T.fresh(30); D.set({ hero: { hp: 5 } }); D.zombieAttack("slow"); D.step(T.slowHitIn + 60); return D.state(); });
+  check(s.dead === "dead" && s.after.wave === 2 && s.after.zombies.length === 2 && s.after.zombie.hp === 114 && s.after.kills === 1, "derrotar o zumbi chama a onda 2: dois zumbis, mais fortes");
+  check(s.after.zombies.every((z) => z.state === "spawn" || z.state === "idle" || z.state === "walk" || z.state === "run"), "os zumbis da onda nova surgem do chão");
+  s = await E(() => { const D = window.duelo; T.fresh(30); D.set({ hero: { hp: 5 } }); D.zombieAttack("slow"); D.step(T.slowHitIn + 90); return D.state(); });
   check(s.mode === "over", "vida zerada: fim de jogo");
   await page.screenshot({ path: path.join(OUT, "duelo-6-fim.png") });
   s = await E(() => { const D = window.duelo; D.tap("attack"); return D.state(); });
-  check(s.mode === "play" && s.wave === 1 && s.hero.hp === 100, "dá para lutar de novo");
+  check(s.mode === "play" && s.wave === 1 && s.hero.hp === 120, "dá para lutar de novo");
 
   // ---------- IA: aproxima e usa os dois tipos de ataque ----------
   s = await E(() => {
@@ -239,6 +240,42 @@ const HELPERS = () => {
   });
   check(s.seen.includes("run") && s.seen.includes("walk") && s.minDist < 40, `zumbi corre e anda até o herói (estados: ${s.seen.join(", ")})`);
   check(s.seen.includes("attack") && s.seen.includes("combo"), "zumbi usa o ataque lento e a sequência de 4");
+  check(s.seen.includes("leap"), "zumbi também salta em cima do herói de longe");
+
+  // ---------- salto do zumbi ----------
+  s = await E(() => {
+    const D = window.duelo;
+    T.fresh(110);
+    const x0 = D.state().zombie.x;
+    D.zombieAttack("leap");
+    let maxUp = 0;
+    for (let i = 0; i < 80; i++) { D.step(1); maxUp = Math.max(maxUp, 184 - D.state().zombie.y); if (D.state().zombie.state === "idle") break; }
+    return { x0, st: D.state(), maxUp, sounds: D.sounds() };
+  });
+  check(s.maxUp > 10 && Math.abs(s.st.zombie.x - s.st.hero.x) < 40, `salto: sobe ${s.maxUp.toFixed(0)} px e cai perto do herói`);
+  check(s.sounds.includes("thud") && s.st.hero.hp < 120, "a queda do salto acerta quem não defende");
+  s = await E(() => { const D = window.duelo; T.fresh(110); D.zombieAttack("leap"); T.guardEach(4); return { st: D.state(), sounds: D.sounds() }; });
+  check(s.sounds.includes("parry") && s.st.hero.hp === 120, "dá para dar parry na queda do salto");
+
+  // ---------- vários zumbis ----------
+  s = await E(() => {
+    const D = window.duelo;
+    D.start(); D.ai(true); D.wave(4); D.clearSounds();
+    const n = D.state().zombies.length;
+    const spawning = D.state().zombies.every((z) => z.state === "spawn");
+    let maxAtk = 0;
+    for (let i = 0; i < 2500; i++) {
+      D.set({ hero: { hp: 120, inv: 0 } });
+      D.step(1);
+      const atk = D.state().zombies.filter((z) => ["attack", "combo", "leap"].includes(z.state)).length;
+      maxAtk = Math.max(maxAtk, atk);
+    }
+    return { n, spawning, maxAtk };
+  });
+  check(s.n === 3 && s.spawning, "onda 4: três zumbis surgindo do chão");
+  check(s.maxAtk >= 2 && s.maxAtk <= 2, `no máximo dois atacam ao mesmo tempo (máximo visto: ${s.maxAtk})`);
+  await E(() => { const D = window.duelo; D.start(); D.ai(true); D.wave(4); D.step(160); });
+  await page.screenshot({ path: path.join(OUT, "duelo-8-tres-zumbis.png") });
 
   // cena de combate para olhar
   await E(() => { const D = window.duelo; T.fresh(30); D.tap("attack"); for (let i = 0; i < 40; i++) { if (i % 5 === 0) D.tap("attack"); else D.step(1); } });
@@ -273,6 +310,26 @@ const HELPERS = () => {
   check((await pp.evaluate(() => window.duelo.state().mode)) === "title", "Menu volta ao título");
   const fits = await pp.evaluate(() => { const c = document.querySelector("canvas").getBoundingClientRect(); return c.width <= innerWidth + 1 && c.height <= innerHeight + 1; });
   check(fits, "o jogo cabe na tela do celular deitado");
+
+  // celular em pé: o jogo gira e fica deitado
+  const tall = await browser.newContext({ ...devices["iPhone 13"] });
+  const tp = await tall.newPage();
+  watch(tp);
+  await tp.goto(URL);
+  await tp.waitForTimeout(400);
+  const rot = await tp.evaluate(() => {
+    const c = document.querySelector("canvas").getBoundingClientRect();
+    const btns = [...document.querySelectorAll(".pad button")].map((b) => b.getBoundingClientRect());
+    const inside = btns.every((r) => r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.width > 0);
+    return { rotated: window.duelo.state().rotated, cw: c.width, ch: c.height, vw: innerWidth, vh: innerHeight, inside };
+  });
+  check(rot.rotated && rot.ch > rot.cw, `celular em pé: o jogo gira para ficar deitado (ocupa ${Math.round(rot.cw)}×${Math.round(rot.ch)} numa tela ${rot.vw}×${rot.vh})`);
+  check(rot.ch > rot.vh * 0.85, "celular em pé: o jogo girado ocupa quase toda a altura da tela");
+  check(rot.inside, "celular em pé: os botões ficam dentro da tela");
+  await tp.tap("canvas");
+  await tp.waitForTimeout(300);
+  check((await tp.evaluate(() => window.duelo.state().mode)) === "play", "celular em pé: tocar começa a luta");
+  await tp.screenshot({ path: path.join(OUT, "duelo-9-celular-em-pe.png") });
 
   check(errors.length === 0, `nenhum erro no console${errors.length ? ": " + [...new Set(errors)].join(" | ") : ""}`);
   await browser.close();

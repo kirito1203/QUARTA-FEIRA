@@ -1,8 +1,9 @@
 """Converte as sprite sheets do herói e do zumbi para o jogo "Meia-Noite" (duelo/).
 
-Cada animação é uma lista de retângulos no PNG original. Quando os efeitos de
-corte encostam no quadro vizinho, o grupo é cortado no ponto mais vazio entre os
-personagens (centros aproximados em CUTS).
+Usa as folhas v2 (duelo/sprites/v2-*-original.png). Cada animação é uma seção
+retangular da folha (SECTIONS); a seção é dividida no número de quadros dado,
+cortando no ponto mais vazio perto de cada divisão (os efeitos dos golpes
+encostam nos vizinhos), ou em cortes manuais quando a lista é dada.
 
 Para cada quadro: fundo preto vira transparente, reduz para o tamanho do jogo,
 limpa as cores (k-means) e alinha pelo corpo (as roupas escuras, que não se
@@ -66,55 +67,98 @@ def split_by_centers(rgb, y0, y1, centers, x_start, x_end, masks=()):
     return [[cuts[i], cuts[i + 1]] for i in range(len(centers))]
 
 
+P2 = "v2-personagens-original.png"
+Z2 = "v2-zumbi-original.png"
+
+# Seções das folhas novas: (arquivo, x0, x1, y0, y1, quadros ou cortes manuais)
+SECTIONS = {
+    "hero": {
+        "idle": (P2, 15, 480, 85, 168, 5), "walk": (P2, 515, 960, 85, 168, 7), "run": (P2, 985, 1525, 85, 168, 7),
+        "jump": (P2, 12, 565, 212, 322, 6), "fall": (P2, 585, 1020, 225, 318, 5), "land": (P2, 1045, 1525, 225, 324, 5),
+        "basic": (P2, 12, 495, 360, 452, 6), "combo": (P2, 512, 1188, 340, 454, [515, 595, 683, 795, 858, 990, 1080, 1184]), "guard": (P2, 1198, 1525, 355, 472, 4),
+        "power": (P2, 12, 995, 462, 588, [18, 128, 228, 325, 460, 625, 745, 984]),
+        "death": (P2, 1010, 1525, 495, 590, 7),
+    },
+    "zombie": {
+        "idle": (Z2, 20, 750, 95, 222, 7), "walk": (Z2, 775, 1525, 100, 222, 8), "run": (Z2, 20, 780, 290, 414, 6),
+        "jump": (Z2, 800, 1525, 282, 414, 6), "attack": (Z2, 15, 975, 470, 594, [50, 175, 290, 392, 533, 790, 935]), "guard": (Z2, 1000, 1525, 470, 596, 4),
+        "combo": (Z2, 15, 1525, 640, 764, 9), "stun": (Z2, 15, 575, 825, 974, 5), "death": (Z2, 590, 1190, 825, 974, 5),
+        "rise": (Z2, 1195, 1525, 785, 1000, [1195, 1525]),
+    },
+}
+# títulos das seções que ficam dentro do retângulo de algumas animações
+LABELS = [(P2, 512, 700, 336, 356), (P2, 12, 240, 462, 488)]
+
+
+def occupancy(rgb, x0, x1, y0, y1):
+    m = rgb[y0:y1, x0:x1].max(axis=2) > 40
+    for r in range(m.shape[0]):
+        if m[r].sum() > (x1 - x0) * 0.5:
+            m[r] = False  # linhas divisórias
+    return m
+
+
+def even_split(rgb, x0, x1, y0, y1, n):
+    """Divide a seção em n quadros (as folhas têm espaçamento quase regular),
+    cortando no ponto mais vazio perto de cada divisão."""
+    cols = occupancy(rgb, x0, x1, y0, y1).sum(0)
+    xs = np.nonzero(cols)[0]
+    a, b = int(xs.min()), int(xs.max()) + 1
+    step = (b - a) / n
+    cuts = [a]
+    for i in range(1, n):
+        mid = a + step * i
+        lo, hi = int(mid - step * 0.35), int(mid + step * 0.35)
+        cuts.append(lo + int(np.argmin(cols[lo:hi] + np.abs(np.arange(lo, hi) - mid) * 0.02)))
+    cuts.append(b)
+    return [(x0 + cuts[i], x0 + cuts[i + 1]) for i in range(n)]
+
+
+def erase_thin_lines(rgb):
+    """Apaga as linhas finas das legendas (traço horizontal comprido com fundo
+    escuro logo acima e abaixo). Os cortes de espada são grossos e ficam."""
+    m = rgb.max(axis=2) > 40
+    h, w = m.shape
+    for y in range(2, h - 2):
+        row = m[y]
+        x = 0
+        while x < w:
+            if not row[x]:
+                x += 1
+                continue
+            x0 = x
+            while x < w and row[x]:
+                x += 1
+            if x - x0 >= 40:
+                band = slice(x0, x)
+                above = m[y - 2, band].mean()
+                below = m[y + 2, band].mean()
+                if above < 0.3 and below < 0.3:
+                    rgb[y - 1:y + 2, band] = 0
+    return rgb
+
+
 def rects():
-    hm = load("heroi-movimento-original.png")
-    ha = load("heroi-ataques-original.png")
-    zb = load("zumbi-original.png")
+    images = {P2: erase_thin_lines(load(P2)), Z2: erase_thin_lines(load(Z2))}
+    for src, x0, x1, y0, y1 in LABELS:
+        images[src][y0:y1, x0:x1] = 0
     R = {"hero": {}, "zombie": {}}
-
-    # herói, movimento: mesma folha do "Lá em Cima", recortada pelo mesmo método de lá
-    import sys
-    sys.path.insert(0, str(ROOT / "tools"))
-    from extract_sprites import find_boxes, group_player
-    for name, boxes in group_player(find_boxes(hm, 22)).items():
-        R["hero"][name] = ("heroi-movimento-original.png", [(x0, x1, y0, y1) for (x0, y0, x1, y1) in sorted(boxes, key=lambda b: b[0])])
-
-    # herói, ataques
-    g, _ = column_groups(ha, 0, 1536, 88, 212)
-    R["hero"]["basic"] = ("heroi-ataques-original.png", [(a, b, 88, 212) for a, b in g])
-    label = [(0, 720, 0, 306)]
-    combo = split_by_centers(ha, 285, 476, [88, 255, 425, 568, 690, 845, 1000, 1165, 1300], 30, 1520, label)
-    R["hero"]["combo"] = ("heroi-ataques-original.png", [(a, b, 306 if a < 720 else 285, 476) for a, b in combo])
-    divider = [(552, 570, 0, 1024)]
-    guard = split_by_centers(ha, 585, 752, [84, 244, 400], 30, 552, divider)
-    R["hero"]["guard"] = ("heroi-ataques-original.png", [(a, b, 585, 752) for a, b in guard])
-    power = split_by_centers(ha, 585, 752, [640, 790, 945, 1255, 1440], 580, 1520, divider)
-    R["hero"]["power"] = ("heroi-ataques-original.png", [(a, b, 585, 752) for a, b in power])
-    g, _ = column_groups(ha, 0, 1536, 845, 975)
-    R["hero"]["powerEnd"] = ("heroi-ataques-original.png", [(a, b, 845, 975) for a, b in g])
-
-    # zumbi
-    g, _ = column_groups(zb, 0, 1536, 84, 216)
-    R["zombie"]["idle"] = ("zumbi-original.png", [(a, b, 84, 216) for a, b in g[:4]])
-    R["zombie"]["walk"] = ("zumbi-original.png", [(a, b, 84, 216) for a, b in g[4:]])
-    g, _ = column_groups(zb, 0, 1536, 323, 456)
-    R["zombie"]["run"] = ("zumbi-original.png", [(a, b, 323, 456) for a, b in g[:5]])
-    R["zombie"]["attack"] = ("zumbi-original.png", [(a, b, 323, 456) for a, b in g[5:]])
-    g, _ = column_groups(zb, 0, 1536, 502, 700, [(0, 800, 0, 540)])
-    R["zombie"]["combo"] = ("zumbi-original.png", [(a, b, 540, 700) for a, b in g])
-    g, _ = column_groups(zb, 0, 1536, 800, 960)
-    R["zombie"]["guard"] = ("zumbi-original.png", [(a, b, 800, 960) for a, b in g[:3]])
-    R["zombie"]["stun"] = ("zumbi-original.png", [(a, b, 800, 960) for a, b in g[3:6]])
-    R["zombie"]["death"] = ("zumbi-original.png", [(a, b, 800, 960) for a, b in g[6:]])
-    return R
+    for who, secs in SECTIONS.items():
+        for name, (src, x0, x1, y0, y1, n) in secs.items():
+            if isinstance(n, list):
+                cols = list(zip(n, n[1:]))
+            else:
+                cols = even_split(images[src], x0, x1, y0, y1, n)
+            R[who][name] = (src, [(a, b, y0, y1) for a, b in cols])
+    return R, images
 
 
 EXPECT = {
-    "hero": {"idle": 4, "run": 7, "jump": 6, "fall": 4, "land": 5, "basic": 5, "combo": 9, "guard": 3, "power": 5, "powerEnd": 5},
-    "zombie": {"idle": 4, "walk": 6, "run": 5, "attack": 4, "combo": 8, "guard": 3, "stun": 3, "death": 4},
+    "hero": {"idle": 5, "walk": 7, "run": 7, "jump": 6, "fall": 5, "land": 5, "basic": 6, "combo": 7, "guard": 4, "power": 7, "death": 7},
+    "zombie": {"idle": 7, "walk": 8, "run": 6, "jump": 6, "attack": 6, "guard": 4, "combo": 9, "stun": 5, "death": 5, "rise": 1},
 }
-# altura do personagem em pé em cada folha (para todas ficarem na mesma escala)
-STANDING = {"heroi-movimento-original.png": ("idle", 0), "heroi-ataques-original.png": ("powerEnd", 4), "zumbi-original.png": ("idle", 0)}
+# quadro "em pé" de cada folha, para todos ficarem na mesma altura no jogo
+STANDING = {"hero": ("idle", 0), "zombie": ("idle", 0)}
 
 
 def body_anchor(crop):
@@ -141,24 +185,17 @@ def kmeans(pixels, k, iters=25, seed=5):
     return cent
 
 
-def build(who, anims):
-    images = {}
-    scale = {}
-    for src, (anim, idx) in STANDING.items():
-        if anim not in anims or anims[anim][0] != src:
-            continue
-        rgb = images.setdefault(src, load(src))
-        x0, x1, y0, y1 = anims[anim][1][idx]
-        m = rgb[y0:y1, x0:x1].max(axis=2) > 30
-        ys = np.nonzero(m.any(axis=1))[0]
-        scale[src] = TARGET_H / (ys.max() - ys.min() + 1)
-    # personagem com folhas sem quadro "em pé" usa a escala de outra folha do mesmo personagem
-    for name, (src, _) in anims.items():
-        images.setdefault(src, load(src))
+def build(who, anims, images, standing):
+    anim, idx = standing
+    src0 = anims[anim][0]
+    x0, x1, y0, y1 = anims[anim][1][idx]
+    m = images[src0][y0:y1, x0:x1].max(axis=2) > 40
+    ys = np.nonzero(m.any(axis=1))[0]
+    s = TARGET_H / (ys.max() - ys.min() + 1)
+    scale = {src0: s}
     small = {}
     for name, (src, boxes) in anims.items():
         rgb = images[src]
-        s = scale[src]
         small[name] = []
         for (x0, x1, y0, y1) in boxes:
             crop = rgb[y0:y1, x0:x1]
@@ -229,13 +266,13 @@ def build(who, anims):
 
 
 def main():
-    R = rects()
+    R, images = rects()
     for who, exp in EXPECT.items():
         got = {k: len(v[1]) for k, v in R[who].items()}
         assert got == exp, (who, got)
     sprites = {
-        "hero": build("heroi", R["hero"]),
-        "zombie": build("zumbi", R["zombie"]),
+        "hero": build("heroi", R["hero"], images, STANDING["hero"]),
+        "zombie": build("zumbi", R["zombie"], images, STANDING["zombie"]),
     }
     if GAME.exists():
         js = "const SPRITES = " + json.dumps(sprites, separators=(",", ":")) + ";"
